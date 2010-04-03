@@ -14,10 +14,21 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-all: FORCE
-	for i in argtypes buffer dump hexreader usbwrap; do make -C ../../libs/$$i -f Makefile.linux; done
+all: \
+		../../libs/argtypes \
+		../../libs/buffer \
+		../../libs/dump \
+		../../libs/hexreader \
+		../../libs/usbwrap
+	make -f Makefile.linux -C ../../libs/argtypes
+	make -f Makefile.linux -C ../../libs/buffer
+	make -f Makefile.linux -C ../../libs/dump
+	make -f Makefile.linux -C ../../libs/hexreader
+	make -f Makefile.linux -C ../../libs/usbwrap
 	make -C firmware
 	make -f Makefile.linux -C host
+
+-include Makefile.common
 
 clean: FORCE
 	rm -f drivers/libusb0*

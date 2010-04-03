@@ -14,32 +14,37 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-../argtypes:
+../../libs/argtypes:
 	wget http://github.com/makestuff/argtypes/tarball/master
 	tar xvzf makestuff-argtypes-*.tar.gz
 	rm makestuff-argtypes-*.tar.gz
-	mv makestuff-argtypes* ../argtypes
+	mkdir -p ../../libs
+	mv makestuff-argtypes* ../../libs/argtypes
 
-../buffer:
+../../libs/buffer:
 	wget http://github.com/makestuff/buffer/tarball/master
 	tar xvzf makestuff-buffer-*.tar.gz
 	rm makestuff-buffer-*.tar.gz
-	mv makestuff-buffer* ../buffer
+	mkdir -p ../../libs
+	mv makestuff-buffer* ../../libs/buffer
 
-../dump:
+../../libs/dump:
 	wget http://github.com/makestuff/dump/tarball/master
 	tar xvzf makestuff-dump-*.tar.gz
 	rm makestuff-dump-*.tar.gz
-	mv makestuff-dump* ../dump
+	mkdir -p ../../libs
+	mv makestuff-dump* ../../libs/dump
 
-../hexreader:
+../../libs/hexreader:
 	wget http://github.com/makestuff/hexreader/tarball/master
 	tar xvzf makestuff-hexreader-*.tar.gz
 	rm makestuff-hexreader-*.tar.gz
-	mv makestuff-hexreader* ../hexreader
+	mkdir -p ../../libs
+	mv makestuff-hexreader* ../../libs/hexreader
 
-../usbwrap:
+../../libs/usbwrap:
 	wget http://github.com/makestuff/usbwrap/tarball/master
 	tar xvzf makestuff-usbwrap-*.tar.gz
 	rm makestuff-usbwrap-*.tar.gz
-	mv makestuff-usbwrap* ../usbwrap
+	mkdir -p ../../libs
+	mv makestuff-usbwrap* ../../libs/usbwrap

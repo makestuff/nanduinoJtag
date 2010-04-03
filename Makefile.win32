@@ -19,7 +19,15 @@ UNZIP_HOME = ../../3rd/unz$(UNZIP_VERSION)
 LIBUSB_VERSION = 0.1.12.2
 LIBUSB_HOME = ../../3rd/libusb-win32-device-bin-$(LIBUSB_VERSION)
 
-all: $(UNZIP_HOME) $(LIBUSB_HOME) drivers/libusb0.dll
+all: \
+		../../libs/argtypes \
+		../../libs/buffer \
+		../../libs/dump \
+		../../libs/hexreader \
+		../../libs/usbwrap \
+		$(UNZIP_HOME) \
+		$(LIBUSB_HOME) \
+		drivers/libusb0.dll
 	make -f Makefile.win32 -C ../../libs/argtypes
 	make -f Makefile.win32 -C ../../libs/buffer
 	make -f Makefile.win32 -C ../../libs/dump
@@ -27,6 +35,8 @@ all: $(UNZIP_HOME) $(LIBUSB_HOME) drivers/libusb0.dll
 	make -f Makefile.win32 -C ../../libs/usbwrap
 	make -C firmware UNZ=../$(UNZIP_HOME)/unzip
 	make -f Makefile.win32 -C host
+
+-include Makefile.common
 
 $(UNZIP_HOME):
 	wget ftp://ftp.info-zip.org/pub/infozip/win32/unz$(UNZIP_VERSION)xn.exe

@@ -1,3 +1,17 @@
+Simple JTAG interface for an AT90USB162 board (e.g Nanduino).
+
+The project build assumes a directory structure like this:
+
+src
+|
++-apps
+| |
+| +-nanduinoJtag
+|
++-libs
+|
++-3rd
+
 *** BUILDING ON WINDOWS ***
 
 make -f Makefile.win32

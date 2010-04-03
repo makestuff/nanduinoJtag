@@ -1,0 +1,45 @@
+#
+# Copyright (C) 2009-2010 Chris McClelland
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+../argtypes:
+	wget http://github.com/makestuff/argtypes/tarball/master
+	tar xvzf makestuff-argtypes-*.tar.gz
+	rm makestuff-argtypes-*.tar.gz
+	mv makestuff-argtypes* ../argtypes
+
+../buffer:
+	wget http://github.com/makestuff/buffer/tarball/master
+	tar xvzf makestuff-buffer-*.tar.gz
+	rm makestuff-buffer-*.tar.gz
+	mv makestuff-buffer* ../buffer
+
+../dump:
+	wget http://github.com/makestuff/dump/tarball/master
+	tar xvzf makestuff-dump-*.tar.gz
+	rm makestuff-dump-*.tar.gz
+	mv makestuff-dump* ../dump
+
+../hexreader:
+	wget http://github.com/makestuff/hexreader/tarball/master
+	tar xvzf makestuff-hexreader-*.tar.gz
+	rm makestuff-hexreader-*.tar.gz
+	mv makestuff-hexreader* ../hexreader
+
+../usbwrap:
+	wget http://github.com/makestuff/usbwrap/tarball/master
+	tar xvzf makestuff-usbwrap-*.tar.gz
+	rm makestuff-usbwrap-*.tar.gz
+	mv makestuff-usbwrap* ../usbwrap

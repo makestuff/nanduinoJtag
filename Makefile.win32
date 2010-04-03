@@ -1,0 +1,56 @@
+#
+# Copyright (C) 2009-2010 Chris McClelland
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+UNZIP_VERSION = 600
+UNZIP_HOME = ../../3rd/unz$(UNZIP_VERSION)
+LIBUSB_VERSION = 0.1.12.2
+LIBUSB_HOME = ../../3rd/libusb-win32-device-bin-$(LIBUSB_VERSION)
+
+all: $(UNZIP_HOME) $(LIBUSB_HOME) drivers/libusb0.dll
+	make -f Makefile.win32 -C ../../libs/argtypes
+	make -f Makefile.win32 -C ../../libs/buffer
+	make -f Makefile.win32 -C ../../libs/dump
+	make -f Makefile.win32 -C ../../libs/hexreader
+	make -f Makefile.win32 -C ../../libs/usbwrap
+	make -C firmware UNZ=../$(UNZIP_HOME)/unzip
+	make -f Makefile.win32 -C host
+
+$(UNZIP_HOME):
+	wget ftp://ftp.info-zip.org/pub/infozip/win32/unz$(UNZIP_VERSION)xn.exe
+	mkdir unz$(UNZIP_VERSION); cd unz$(UNZIP_VERSION); ../unz$(UNZIP_VERSION)xn.exe
+	mkdir -p ../../3rd
+	mv unz$(UNZIP_VERSION) ../../3rd/
+	rm -rf unz$(UNZIP_VERSION)xn.exe
+
+$(LIBUSB_HOME):
+	wget 'http://downloads.sourceforge.net/project/libusb-win32/libusb-win32-releases/$(LIBUSB_VERSION)/libusb-win32-device-bin-$(LIBUSB_VERSION).tar.gz'
+	tar xvzf libusb-win32-device-bin-$(LIBUSB_VERSION).tar.gz
+	rm libusb-win32-device-bin-$(LIBUSB_VERSION).tar.gz
+	mkdir -p ../../3rd
+	mv libusb-win32-device-bin-$(LIBUSB_VERSION) ../../3rd/
+
+drivers/libusb0.dll:
+	cp $(LIBUSB_HOME)/bin/libusb0.dll drivers/
+	cp $(LIBUSB_HOME)/bin/libusb0.sys drivers/
+	cp $(LIBUSB_HOME)/bin/libusb0_x64.dll drivers/
+	cp $(LIBUSB_HOME)/bin/libusb0_x64.sys drivers/
+
+clean: FORCE
+	rm -f drivers/libusb0*
+	make -C firmware clean
+	make -f Makefile.win32 -C host clean
+
+FORCE:

@@ -1,0 +1,31 @@
+*** BUILDING ON WINDOWS ***
+
+You will need WinAVR (I used WinAVR-20090313) from here:
+
+  http://winavr.sourceforge.net
+
+...and Atmel's FLIP tool from here:
+
+  http://www.atmel.com/dyn/products/tools_card.asp?tool_id=3886
+
+...for loading code to the AVR over USB.
+
+Then just do this:
+
+  make
+  make flash
+
+
+*** BUILDING ON LINUX ***
+
+You will need gcc-avr, avr-libc and dfu-programmer, e.g
+
+  sudo apt-get install gcc-avr
+  sudo apt-get install avr-libc
+  sudo apt-get install dfu-programmer
+
+Then just do this:
+
+  make
+  sudo make dfu
+

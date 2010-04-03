@@ -1,0 +1,5 @@
+These are the Windows custom LibUSB drivers. They are not used on Linux.
+
+The customDevice.cat, customDevice.inf and customDevice_x64.cat files in here
+were created using the inf-wizard.exe from the LibUSB-Win32 package. The other
+files are copied directly from the LibUSB-Win32 package.

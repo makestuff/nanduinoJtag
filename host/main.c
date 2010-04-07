@@ -39,16 +39,24 @@ typedef struct {
 } Device;
 
 #define ATMEGA162 0
+#define XC9572    1
 #define BLOCK_SIZE 128
 
 static Device devices[] = {
-	{"ATMEL", "ATMEGA162", 16384/BLOCK_SIZE}
+	{"ATMEL", "ATMEGA162", 16384/BLOCK_SIZE},
+	{"XILINX", "XC9572", 0}
 };
 
 const Device *getDevice(unsigned short manufacturerID, unsigned short deviceID) {
 	if ( manufacturerID == 0x01F ) {
 		if ( deviceID == 0x9404 ) {
 			return &devices[ATMEGA162];
+		} else {
+			return NULL;
+		}
+	} else if ( manufacturerID == 0x49 ) {
+		if ( deviceID == 0x9504 ) {
+			return &devices[XC9572];
 		} else {
 			return NULL;
 		}
@@ -139,7 +147,7 @@ int main(int argc, char **argv) {
 	manufacturerID = (ident >> 1) & 0x07FF;
 	device = getDevice(manufacturerID, deviceID);
 	if ( !device ) {
-		fprintf(stderr, "Unrecognised device: 0x%04X/0x%04X\n", manufacturerID, deviceID);
+		fprintf(stderr, "Unrecognised device: 0x%04X/0x%04X (IDCODE 0x%08X)\n", manufacturerID, deviceID, ident);
 		goexit(1);
 	}
 	printf("Found %s %s (rev %c)\n", device->Manufacturer, device->DeviceID, revision);

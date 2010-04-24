@@ -41,7 +41,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="../../../libs/argtypes;../../../libs/buffer;../../../libs/dump;../../../libs/hexreader;../../../libs/usbwrap;&quot;../../../3rd/argtable2-12/src&quot;;&quot;../../../3rd/libusb-win32-device-bin-0.1.12.2/include&quot;"
+				AdditionalIncludeDirectories="../../../include;../../../libs/argtypes;../../../libs/buffer;../../../libs/dump;../../../libs/usbwrap;../../../3rd/argtable2-12/src;../../../3rd/libusb-win32-device-bin-0.1.12.2/include"
 				PreprocessorDefinitions="WIN32;_DEBUG;_CONSOLE"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -62,7 +62,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions="/NODEFAULTLIB:LIBCMT"
-				AdditionalDependencies="../../../libs/argtypes/Debug/argtypes.lib ../../../libs/buffer/Debug/buffer.lib ../../../libs/dump/Debug/dump.lib ../../../libs/hexreader/Debug/hexreader.lib ../../../libs/usbwrap/Debug/usbwrap.lib ../../../3rd/libusb-win32-device-bin-0.1.12.2/lib/msvc/libusb.lib ../../../3rd/argtable2-12/src/argtable2.lib"
+				AdditionalDependencies="../../../libs/argtypes/Debug/argtypes.lib ../../../libs/buffer/Debug/buffer.lib ../../../libs/dump/Debug/dump.lib ../../../libs/usbwrap/Debug/usbwrap.lib ../../../3rd/libusb-win32-device-bin-0.1.12.2/lib/msvc/libusb.lib ../../../3rd/argtable2-12/src/argtable2.lib"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				SubSystem="1"
@@ -116,8 +116,8 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="2"
-				AdditionalIncludeDirectories="../../../libs/argtypes;../../../libs/buffer;../../../libs/dump;../../../libs/hexreader;../../../libs/usbwrap;&quot;../../../3rd/argtable2-12/src&quot;;&quot;../../../3rd/libusb-win32-device-bin-0.1.12.2/include&quot;"
 				EnableIntrinsicFunctions="true"
+				AdditionalIncludeDirectories="../../../include;../../../libs/argtypes;../../../libs/buffer;../../../libs/dump;../../../libs/usbwrap;../../../3rd/argtable2-12/src;../../../3rd/libusb-win32-device-bin-0.1.12.2/include"
 				PreprocessorDefinitions="WIN32;NDEBUG;_CONSOLE"
 				RuntimeLibrary="2"
 				EnableFunctionLevelLinking="true"
@@ -137,7 +137,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions="/NODEFAULTLIB:LIBCMT"
-				AdditionalDependencies="../../../libs/argtypes/Release/argtypes.lib ../../../libs/buffer/Release/buffer.lib ../../../libs/dump/Release/dump.lib ../../../libs/hexreader/Release/hexreader.lib ../../../libs/usbwrap/Release/usbwrap.lib ../../../3rd/libusb-win32-device-bin-0.1.12.2/lib/msvc/libusb.lib ../../../3rd/argtable2-12/src/argtable2.lib"
+				AdditionalDependencies="../../../libs/argtypes/Release/argtypes.lib ../../../libs/buffer/Release/buffer.lib ../../../libs/dump/Release/dump.lib ../../../libs/usbwrap/Release/usbwrap.lib ../../../3rd/libusb-win32-device-bin-0.1.12.2/lib/msvc/libusb.lib ../../../3rd/argtable2-12/src/argtable2.lib"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				SubSystem="1"

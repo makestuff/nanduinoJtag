@@ -20,9 +20,6 @@
 #include <LUFA/Drivers/USB/USB.h>
 #include <avr/pgmspace.h>
 
-typedef uint32_t uint32;
-typedef uint16_t uint16;
-typedef uint8_t uint8;
 typedef USB_Descriptor_Device_t USBDeviceDescriptor;
 typedef USB_Descriptor_String_t USBStringDescriptor;
 typedef USB_Descriptor_Configuration_Header_t USBConfigurationDescriptorHeader;
@@ -36,9 +33,9 @@ typedef struct {
 	USBEndpointDescriptor            OutEndpoint;
 } USBConfigurationDescriptor;
 
-uint16 CALLBACK_USB_GetDescriptor(
-	const uint16 wValue,
-	const uint8 wIndex,
+uint16_t CALLBACK_USB_GetDescriptor(
+	const uint16_t wValue,
+	const uint8_t wIndex,
 	void** const descriptorAddress)
 	ATTR_WARN_UNUSED_RESULT ATTR_NON_NULL_PTR_ARG(3);
 

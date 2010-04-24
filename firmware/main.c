@@ -13,7 +13,7 @@
  *  
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */ 
+ */
 #include <avr/io.h>
 #include <avr/wdt.h>
 #include <avr/power.h>
@@ -21,8 +21,21 @@
 #include <LUFA/Version.h>
 #include <LUFA/Drivers/USB/USB.h>
 #include "desc.h"
+#include "usart.h"
+#include "parse.h"
+#include "types.h"
+#include "../commands.h"
 
-static uint32 magic = 0;
+//#define DEBUG 1
+#define RETRIES 3
+#define CHUNK_SIZE 64
+
+static uint32 m_status = 0x00000000;
+static uint32 m_idleCycles;
+#ifndef RETRIES
+	static uint8  m_repeats;
+#endif
+static uint32 m_failures;
 
 int main(void) {
 	MCUSR &= ~(1 << WDRF);
@@ -30,6 +43,8 @@ int main(void) {
 	clock_prescale_set(clock_div_1);
 	PORTB = 0x00;
 	DDRB = 0x00;
+	usartInit();
+	usartSendFlashString(PSTR("NanduinoJTAG...\n"));
 	USB_Init();
 	
 	for ( ; ; ) {
@@ -46,14 +61,14 @@ void EVENT_USB_Device_Disconnect(void) {
 }
 
 void EVENT_USB_Device_ConfigurationChanged(void) {
-	magic = 0;
+	m_status = 0x00000000;
 	if ( !(Endpoint_ConfigureEndpoint(IN_ENDPOINT_ADDR,
 	                                  EP_TYPE_BULK,
 	                                  ENDPOINT_DIR_IN,
 	                                  ENDPOINT_SIZE,
 	                                  ENDPOINT_BANK_SINGLE)) )
 	{
-		magic |= 0xDEAD0000;
+		m_status |= 0xDEAD0000;
 	}
 	if ( !(Endpoint_ConfigureEndpoint(OUT_ENDPOINT_ADDR,
 	                                  EP_TYPE_BULK,
@@ -61,7 +76,7 @@ void EVENT_USB_Device_ConfigurationChanged(void) {
 	                                  ENDPOINT_SIZE,
 	                                  ENDPOINT_BANK_SINGLE)) )
 	{
-		magic |= 0x0000DEAD;
+		m_status |= 0x0000DEAD;
 	}
 }
 
@@ -151,7 +166,7 @@ uint8 jtagExchangeData(uint8 data) {
 		result >>= 1;
 		data >>= 1;
 	}
-	if ( jtagClock(data&0x01 ? TDI : 0) ) {
+	if ( jtagClock(data&0x01 ? TDI : 0) ) {  // Still in Shift-DR
 		result |= 0x80;
 	}
 	return result;
@@ -267,6 +282,17 @@ uint32 jtagResetAndGetIdentRegister(void) {
 	idCode = jtagExchangeData32(0x00000000, 32);  // Now in Exit1-DR
 	jtagGotoIdleState();          // Now in Run-Test/Idle
 	return idCode;
+}
+
+// Reset the JTAG TAP state machine
+//
+void jtagReset(void) {
+	// Go to Test-Logic-Reset
+	jtagClock(TMS);
+	jtagClock(TMS);
+	jtagClock(TMS);
+	jtagClock(TMS);
+	jtagClock(TMS);
 }
 
 // Set the RESET state of the device
@@ -415,25 +441,231 @@ void avrChipErase(void) {
 	while ( !(avrWriteCommand(CMD_1A_POLL_ERASE) & 0x0200) );
 }
 
+ParseStatus gotXCOMPLETE(void) {
+	return PARSE_SUCCESS;
+}
+
+ParseStatus gotXTDOMASK(uint16 length, const uint8 *mask) {
+	return PARSE_SUCCESS;
+}
+
+ParseStatus gotXSIR(uint8 length, const uint8 *sir) {
+	#ifdef DEBUG
+		usartSendFlashString(PSTR("gotXSIR("));
+		usartSendByteHex(length);
+		usartSendFlashString(PSTR(", "));
+		usartSendByteHex(*sir);
+		usartSendFlashString(PSTR(")\n"));
+	#endif
+	sir += bitsToBytes(length) - 1;
+	// Assume Run-Test/Idle on entry
+	jtagClock(TMS);                // Now in Select-DR Scan
+	jtagGotoShiftState();          // Now in Shift-IR
+	while ( length > 8 ) {
+		jtagExchangeData(*sir);      // Stay in Shift-IR
+		length -= 8;
+		sir--;
+	}
+	jtagExchangeData8(*sir, length); // Now in Exit1-DR
+	jtagGotoIdleState();           // Now in Run-Test/Idle
+	return PARSE_SUCCESS;
+}
+
+ParseStatus gotXRUNTEST(uint32 value) {
+	m_idleCycles = value;
+	return PARSE_SUCCESS;
+}
+
+ParseStatus gotXREPEAT(uint8 value) {
+	#ifndef RETRIES
+		m_repeats = value;
+	#endif
+	return PARSE_SUCCESS;
+}
+
+ParseStatus gotXSDRSIZE(uint16 value) {
+	return PARSE_SUCCESS;
+}
+
+inline void delay(uint32 us) {
+	while ( us-- ) {
+		asm("nop");
+		asm("nop");
+		asm("nop");
+		asm("nop");
+		asm("nop");
+		asm("nop");
+		asm("nop");
+		asm("nop");
+		asm("nop");
+		asm("nop");
+	}
+}
+
+ParseStatus gotXSDRTDO(const uint16 length, const uint8 *const data, const uint8 *const mask) {
+	const uint16 offset = bitsToBytes(length);
+	const uint8 *dataPtr;
+	const uint8 *maskPtr;
+	uint16 bitCount;
+	uint8 errorOccurred;
+	uint8 retryCount = 
+	#ifdef RETRIES
+		RETRIES;
+	#else
+		m_repeats;
+	#endif
+	uint8 byte;
+	#ifdef DEBUG
+		uint16 i;
+		usartSendFlashString(PSTR("gotXSDRTDO("));
+		usartSendWordHex(length);
+		usartSendFlashString(PSTR(", "));
+		for ( i = 0; i < offset; i++ ) {
+			usartSendByteHex(data[i]);
+		}
+		usartSendFlashString(PSTR(", "));
+		for ( i = 0; i < offset; i++ ) {
+			usartSendByteHex(data[offset+i]);
+		}
+		usartSendFlashString(PSTR(", mask="));
+		for ( i = 0; i < offset; i++ ) {
+			usartSendByteHex(mask[i]);
+		}
+		usartSendFlashString(PSTR(")\n"));
+	#endif
+	for ( ; ; ) {
+		#if defined(DEBUG) && DEBUG > 1
+			usartSendFlashString(PSTR("  attempt="));
+			#ifdef RETRIES
+				usartSendByteHex(RETRIES-retryCount);
+			#else
+				usartSendByteHex(m_repeats-retryCount);
+			#endif
+			usartSendByte('\n');
+		#endif
+		errorOccurred = 0;
+		dataPtr = data + offset - 1;
+		maskPtr = mask + offset - 1;
+		bitCount = length;
+		// Assume Run-Test/Idle on entry
+		delay(m_idleCycles);
+		jtagGotoShiftState();  // Now in Shift-DR
+		while ( bitCount > 8 ) {
+			byte = jtagExchangeData(*dataPtr);      // Stay in Shift-DR
+			#if defined(DEBUG) && DEBUG > 1
+				usartSendFlashString(PSTR("    sent="));
+				usartSendByteHex(*dataPtr);
+				usartSendFlashString(PSTR(" (bitCount=08), received="));
+				usartSendByteHex(byte);
+				usartSendFlashString(PSTR(", expected="));
+				usartSendByteHex(dataPtr[offset]);
+				usartSendFlashString(PSTR(", mask="));
+				usartSendByteHex(*maskPtr);
+				usartSendFlashString(PSTR("\n"));
+			#endif
+			if ( (byte & *maskPtr) != dataPtr[offset] ) {
+				errorOccurred = 1;
+			}
+			bitCount -= 8;
+			dataPtr--;
+			maskPtr--;
+		}
+		byte = jtagExchangeData8(*dataPtr, bitCount); // Now in Exit1-DR
+		#if defined(DEBUG) && DEBUG > 1
+			usartSendFlashString(PSTR("    sent="));
+			usartSendByteHex(*dataPtr);
+			usartSendFlashString(PSTR(" (bitCount="));
+			usartSendByteHex(bitCount);
+			usartSendFlashString(PSTR("), received="));
+			usartSendByteHex(byte);
+			usartSendFlashString(PSTR(", expected="));
+			usartSendByteHex(dataPtr[offset]);
+			usartSendFlashString(PSTR(", mask="));
+			usartSendByteHex(*maskPtr);
+			usartSendFlashString(PSTR("\n"));
+		#endif
+		if ( (byte & *maskPtr) != dataPtr[offset] ) {
+			errorOccurred = 1;
+		}
+		if ( errorOccurred ) {
+			if ( --retryCount ) {
+				jtagClock(0);    // Now in Pause-DR
+				jtagClock(TMS);  // Now in Exit2-DR
+				jtagClock(0);    // Now in Shift-DR
+				jtagClock(TMS);  // Now in Exit1-DR
+				jtagClock(TMS);  // Now in Update-DR
+				jtagClock(0);    // Now in Run-Test/Idle
+				// ...and try again
+			} else {
+				// reached maxRetries, give up
+				jtagGotoIdleState();  // Now in Run-Test/Idle
+				#if defined(DEBUG) && DEBUG > 1
+					usartSendFlashString(PSTR("  failed!\n"));
+				#endif
+				m_failures++;
+				return PARSE_SUCCESS;
+			}
+		} else {
+			jtagGotoIdleState();  // Now in Run-Test/Idle
+			#if defined(DEBUG) && DEBUG > 1
+				usartSendFlashString(PSTR("  success!\n"));
+			#endif
+			return PARSE_SUCCESS;
+		}
+	}
+}
+
+ParseStatus gotXSTATE(TAPState value) {
+	/*jtagReset();
+	switch ( state ) {
+		case TAPSTATE_TEST_LOGIC_RESET:
+			break;
+		case TAPSTATE_RUN_TEST_IDLE:
+			jtagClock(0);        // Now in Run-Test/Idle
+			break;
+		case TAPSTATE_SELECT_IR:
+	*/
+	return PARSE_SUCCESS;
+}
+
 void EVENT_USB_Device_UnhandledControlRequest(void) {
 	switch ( USB_ControlRequest.bRequest ) {
-		case 0x80:
+		case CMD_RD_IDCODE:
 			if ( USB_ControlRequest.bmRequestType == (REQDIR_DEVICETOHOST | REQTYPE_VENDOR) ) {
+				// Read IDCODE, status, failure count
 				uint32 response[3];
 				DDRB = TCK | TMS | TDI;
 				response[0] = jtagResetAndGetIdentRegister();
-				avrResetEnable(1);
-				avrProgModeEnable(1);
-				response[1] = avrReadFuses();
-				response[2] = magic;
-				avrProgModeEnable(0);
-				avrResetEnable(0);
+				response[1] = m_status;
+				response[2] = m_failures;
 				PORTB = 0x00;
 				DDRB = 0x00;
 				Endpoint_ClearSETUP();
 				Endpoint_Write_Control_Stream_LE(response, 12);
 				Endpoint_ClearStatusStage();
+			}
+			break;
+		case CMD_RW_AVR_FUSES:
+			if ( USB_ControlRequest.bmRequestType == (REQDIR_DEVICETOHOST | REQTYPE_VENDOR) ) {
+				// Read AVR fuses
+				uint32 response;
+				DDRB = TCK | TMS | TDI;
+				jtagReset();
+				avrResetEnable(1);
+				avrProgModeEnable(1);
+				response = avrReadFuses();
+				avrProgModeEnable(0);
+				avrResetEnable(0);
+				PORTB = 0x00;
+				DDRB = 0x00;
+				Endpoint_ClearSETUP();
+				Endpoint_Write_Control_Stream_LE(&response, 4);
+				Endpoint_ClearStatusStage();
 			} else if ( USB_ControlRequest.bmRequestType == (REQDIR_HOSTTODEVICE | REQTYPE_VENDOR) ) {
+				// Write AVR fuses
+				usartSendFlashString(PSTR("Setting fuses to "));
+				usartSendLongHex(((uint32)USB_ControlRequest.wValue << 16) + USB_ControlRequest.wIndex);
+				usartSendByte('\n');
 				DDRB = TCK | TMS | TDI;
 				jtagResetAndGetIdentRegister();
 				avrResetEnable(1);
@@ -447,11 +679,13 @@ void EVENT_USB_Device_UnhandledControlRequest(void) {
 				Endpoint_ClearStatusStage();
 			}
 			break;
-		case 0x81:
+		case CMD_RD_AVR_FLASH:
 			if ( USB_ControlRequest.bmRequestType == (REQDIR_HOSTTODEVICE | REQTYPE_VENDOR) ) {
-				uint8 response[64];
+				// Read AVR flash
+				uint8 response[CHUNK_SIZE];
 				uint8 i;
-				uint16 page, count;
+				uint16 page;
+				uint32 count;
 				Endpoint_ClearSETUP();
 				Endpoint_ClearStatusStage();
 				DDRB = TCK | TMS | TDI;
@@ -459,22 +693,24 @@ void EVENT_USB_Device_UnhandledControlRequest(void) {
 				avrResetEnable(1);
 				avrProgModeEnable(1);
 
-				page = USB_ControlRequest.wValue;
-				count = USB_ControlRequest.wIndex;
-
+				page = 0;
+				count = USB_ControlRequest.wValue;
+				count <<= 16;
+				count += USB_ControlRequest.wIndex;
+				count >>= 7;  // number of 128-byte pages
 				Endpoint_SelectEndpoint(IN_ENDPOINT_ADDR);
 				while ( count-- ) {
 					avrReadFlashBegin(page++);
-					for ( i = 0; i < 64; i++ ) {
+					for ( i = 0; i < CHUNK_SIZE; i++ ) {
 						response[i] = jtagExchangeData(0x00);
 					}
-					Endpoint_Write_Stream_LE(response, 64);
+					Endpoint_Write_Stream_LE(response, CHUNK_SIZE);
 					for ( i = 0; i < 63; i++ ) {
 						response[i] = jtagExchangeData(0x00);
 					}
 					response[63] = jtagExchangeDataEnd(0x00);
 					jtagGotoIdleState();
-					Endpoint_Write_Stream_LE(response, 64);
+					Endpoint_Write_Stream_LE(response, CHUNK_SIZE);
 				}
 				Endpoint_ClearIN();
 				avrProgModeEnable(0);
@@ -483,8 +719,50 @@ void EVENT_USB_Device_UnhandledControlRequest(void) {
 				DDRB = 0x00;
 			}
 			break;
-		case 0x82:
+		case CMD_WR_AVR_FLASH:
 			if ( USB_ControlRequest.bmRequestType == (REQDIR_HOSTTODEVICE | REQTYPE_VENDOR) ) {
+				// Write AVR flash
+				uint8 buffer[CHUNK_SIZE];
+				uint8 i;
+				uint16 page;
+				uint32 count;
+				Endpoint_ClearSETUP();
+				Endpoint_ClearStatusStage();
+				DDRB = TCK | TMS | TDI;
+				jtagResetAndGetIdentRegister();
+				avrResetEnable(1);
+				avrProgModeEnable(1);
+
+				page = 0;
+				count = USB_ControlRequest.wValue;
+				count <<= 16;
+				count += USB_ControlRequest.wIndex;
+				count >>= 7;  // number of 128-byte pages
+				Endpoint_SelectEndpoint(OUT_ENDPOINT_ADDR);
+				while ( !Endpoint_IsOUTReceived() );
+				while ( count-- ) {
+					Endpoint_Read_Stream_LE(buffer, CHUNK_SIZE);
+					avrWriteFlashBegin(page++);
+					for ( i = 0; i < CHUNK_SIZE; i++ ) {
+						jtagExchangeData(buffer[i]);
+					}
+					Endpoint_Read_Stream_LE(buffer, CHUNK_SIZE);
+					for ( i = 0; i < 63; i++ ) {
+						jtagExchangeData(buffer[i]);
+					}
+					jtagExchangeDataEnd(buffer[63]);
+					avrWriteFlashEnd();
+				}
+				Endpoint_ClearOUT();
+				avrProgModeEnable(0);
+				avrResetEnable(0);
+				PORTB = 0x00;
+				DDRB = 0x00;
+			}
+			break;
+		case CMD_ERASE_AVR_FLASH:
+			if ( USB_ControlRequest.bmRequestType == (REQDIR_HOSTTODEVICE | REQTYPE_VENDOR) ) {
+				// Erase AVR flash
 				DDRB = TCK | TMS | TDI;
 				jtagResetAndGetIdentRegister();
 				avrResetEnable(1);
@@ -498,39 +776,53 @@ void EVENT_USB_Device_UnhandledControlRequest(void) {
 				Endpoint_ClearStatusStage();
 			}
 			break;
-		case 0x83:
+		case CMD_WR_XSVF:
 			if ( USB_ControlRequest.bmRequestType == (REQDIR_HOSTTODEVICE | REQTYPE_VENDOR) ) {
-				uint8 buffer[64];
-				uint8 i;
-				uint16 page, count;
+				uint8 buffer[CHUNK_SIZE];
+				uint32 bytesRemaining;
+				ParseStatus parseStatus = PARSE_SUCCESS;
 				Endpoint_ClearSETUP();
 				Endpoint_ClearStatusStage();
+
 				DDRB = TCK | TMS | TDI;
-				jtagResetAndGetIdentRegister();
-				avrResetEnable(1);
-				avrProgModeEnable(1);
-
-				page = USB_ControlRequest.wValue;
-				count = USB_ControlRequest.wIndex;
-
+				bytesRemaining = USB_ControlRequest.wValue;
+				bytesRemaining <<= 16;
+				bytesRemaining |= USB_ControlRequest.wIndex;
+				#ifdef DEBUG
+					usartSendFlashString(PSTR("total = "));
+					usartSendLongHex(bytesRemaining);
+					usartSendByte('\n');
+				#endif
+				m_failures = 0;
+				parseInit();
+				jtagReset();
+				jtagClock(0);        // Now in Run-Test/Idle				
+				
 				Endpoint_SelectEndpoint(OUT_ENDPOINT_ADDR);
 				while ( !Endpoint_IsOUTReceived() );
-				while ( count-- ) {
-					Endpoint_Read_Stream_LE(buffer, 64);
-					avrWriteFlashBegin(page++);
-					for ( i = 0; i < 64; i++ ) {
-						jtagExchangeData(buffer[i]);
-					}
-					Endpoint_Read_Stream_LE(buffer, 64);
-					for ( i = 0; i < 63; i++ ) {
-						jtagExchangeData(buffer[i]);
-					}
-					jtagExchangeDataEnd(buffer[63]);
-					avrWriteFlashEnd();
+				while ( bytesRemaining >= CHUNK_SIZE && parseStatus == PARSE_SUCCESS ) {
+					Endpoint_Read_Stream_LE(buffer, CHUNK_SIZE);
+					parseStatus = parse(buffer, CHUNK_SIZE);
+					bytesRemaining -= CHUNK_SIZE;
 				}
+				if ( parseStatus == PARSE_SUCCESS ) {
+					// If all is well, read the last few bytes (if any)...
+					if ( bytesRemaining ) {
+						Endpoint_Read_Stream_LE(buffer, bytesRemaining);
+						parseStatus = parse(buffer, bytesRemaining);
+					}
+				} else {
+					// An error occurred, throw away the remaining bytes...
+					while ( bytesRemaining >= CHUNK_SIZE ) {
+						Endpoint_Read_Stream_LE(buffer, CHUNK_SIZE);
+						bytesRemaining -= CHUNK_SIZE;
+					}
+					if ( bytesRemaining ) {
+						Endpoint_Read_Stream_LE(buffer, bytesRemaining);
+					}
+				}
+				m_status = parseStatus;
 				Endpoint_ClearOUT();
-				avrProgModeEnable(0);
-				avrResetEnable(0);
 				PORTB = 0x00;
 				DDRB = 0x00;
 			}

@@ -19,16 +19,15 @@ LIBS = \
 	../../../libs/argtypes/libargtypes.a \
 	../../../libs/buffer/libbuffer.a \
 	../../../libs/dump/libdump.a \
-	../../../libs/hexreader/libhexreader.a \
 	../../../libs/usbwrap/libusbwrap.a \
 	../../../3rd/argtable2-12/src/.libs/libargtable2.a \
 	-lusb
 
 INCLUDES = \
+	-I../../../include \
 	-I../../../libs/argtypes \
 	-I../../../libs/buffer \
 	-I../../../libs/dump \
-	-I../../../libs/hexreader \
 	-I../../../libs/usbwrap \
 	-I../../../3rd/argtable2-12/src
 

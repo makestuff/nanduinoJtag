@@ -126,7 +126,7 @@ LUFA_OPTS += -D USE_STATIC_OPTIONS="(USB_DEVICE_OPT_FULLSPEED | USB_OPT_REG_ENAB
 
 # List C source files here. (C dependencies are automatically generated.)
 SRC = \
-        main.c                                                      \
+	main.c                                                      \
 	desc.c                                                      \
 	$(LUFA_PATH)/LUFA/Drivers/USB/LowLevel/DevChapter9.c        \
 	$(LUFA_PATH)/LUFA/Drivers/USB/LowLevel/Endpoint.c           \
@@ -171,7 +171,7 @@ DEBUG = dwarf-2
 #     Each directory must be seperated by a space.
 #     Use forward slashes for directory separators.
 #     For a directory that has spaces, enclose it in quotes.
-EXTRAINCDIRS = $(LUFA_PATH)/
+EXTRAINCDIRS = $(LUFA_PATH) ../../../include ../../../libs/libxsvf ../../../libs/avrutil
 
 
 # Compiler flag to set the C Standard level.
@@ -297,6 +297,7 @@ MATH_LIB = -lm
 #     For a directory that has spaces, enclose it in quotes.
 EXTRALIBDIRS = 
 
+OTHER_LIBS = ../../../libs/libxsvf/lib/avr/libxsvf.a ../../../libs/avrutil/lib/avr/avrutil.a
 
 
 #---------------- External Memory Options ----------------
@@ -322,7 +323,7 @@ LDFLAGS += -Wl,--relax
 LDFLAGS += -Wl,--gc-sections
 LDFLAGS += $(EXTMEMOPTS)
 LDFLAGS += $(patsubst %,-L%,$(EXTRALIBDIRS))
-LDFLAGS += $(PRINTF_LIB) $(SCANF_LIB) $(MATH_LIB)
+LDFLAGS += $(PRINTF_LIB) $(SCANF_LIB) $(MATH_LIB) $(OTHER_LIBS)
 #LDFLAGS += -T linker_script.x
 
 

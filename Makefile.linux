@@ -16,14 +16,16 @@
 #
 all: \
 		../../libs/argtypes \
+		../../libs/avrutil \
 		../../libs/buffer \
 		../../libs/dump \
-		../../libs/hexreader \
+		../../libs/libxsvf \
 		../../libs/usbwrap
 	make -f Makefile.linux -C ../../libs/argtypes
+	make -f Makefile.avr   -C ../../libs/avrutil
 	make -f Makefile.linux -C ../../libs/buffer
 	make -f Makefile.linux -C ../../libs/dump
-	make -f Makefile.linux -C ../../libs/hexreader
+	make -f Makefile.linux -C ../../libs/libxsvf
 	make -f Makefile.linux -C ../../libs/usbwrap
 	make -C firmware
 	make -f Makefile.linux -C host

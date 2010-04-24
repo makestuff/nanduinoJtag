@@ -33,7 +33,7 @@ all: \
 	make -f Makefile.avr   -C ../../libs/avrutil
 	make -f Makefile.win32 -C ../../libs/buffer
 	make -f Makefile.win32 -C ../../libs/dump
-	make -f Makefile.win32 -C ../../libs/libxsvf
+	make -f Makefile.avr   -C ../../libs/libxsvf
 	make -f Makefile.win32 -C ../../libs/usbwrap
 	make -C firmware UNZ=../$(UNZIP_HOME)/unzip
 	make -f Makefile.win32 -C host

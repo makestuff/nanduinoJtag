@@ -25,7 +25,7 @@ all: \
 	make -f Makefile.avr   -C ../../libs/avrutil
 	make -f Makefile.linux -C ../../libs/buffer
 	make -f Makefile.linux -C ../../libs/dump
-	make -f Makefile.linux -C ../../libs/libxsvf
+	make -f Makefile.avr   -C ../../libs/libxsvf
 	make -f Makefile.linux -C ../../libs/usbwrap
 	make -C firmware
 	make -f Makefile.linux -C host

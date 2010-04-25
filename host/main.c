@@ -165,26 +165,28 @@ int bulkRead(UsbDeviceHandle *deviceHandle, CommandByte bRequest, Buffer *buf, u
 }
 
 int main(int argc, char **argv) {
+	struct arg_uint *devIndex = arg_uint0("d", "device", "<num>", "    target device");
 	struct arg_lit *erase = arg_lit0("e",   "erase",       "           erase the flash, lock bits & maybe EEPROM");
 	struct arg_uint *fuses = arg_uint0("f", "fuses",   "<fuses>",  "   set fuses (EX:HI:LO:LK)");
 	struct arg_file *load = arg_file0("i",  "load",    "<inFile>", "   load flash from file");
 	struct arg_file *save = arg_file0("o",  "save",    "<outFile>", "  save flash to file");
-	struct arg_lit *debug = arg_lit0("d",   "debug",       "           output debugging information");
 	struct arg_lit *help  = arg_lit0("h",   "help",        "            print this help and exit");
 	struct arg_end *end   = arg_end(20);
-	void* argTable[] = {erase, fuses, load, save, debug, help, end};
+	void* argTable[] = {devIndex, erase, fuses, load, save, help, end};
 	const char *progName = "nj";
 	uint32 exitCode = 0;
 	int numErrors;
 	int returnCode;
 	union {
-		uint8 bytes[3*sizeof(uint32)];
-		uint32 ints[3];
+		uint8 bytes[16*sizeof(uint32)];
+		uint32 ints[16];
 	} u;
 	uint32 ident;
 	uint16 deviceID, manufacturerID;
 	uint8 revision;
-	const Device *device;
+	const Device* devices[16];
+	const Device *device = NULL;
+	uint8 numDevices, i;
 	UsbDeviceHandle *deviceHandle;
 	Buffer buf;
 
@@ -230,24 +232,56 @@ int main(int argc, char **argv) {
 
 	usb_clear_halt(deviceHandle, 2);
 
-	printf("Reading IDCODE...\n");
-	if ( controlMsgRead(deviceHandle, CMD_RD_IDCODE, 0, 0, u.bytes, 12) ) {
+	if ( controlMsgRead(deviceHandle, CMD_SCAN, 0, 0, u.bytes, 64) ) {
 		exitCode = 4;
 		goto cleanupUsb;
 	}
-	ident = u.ints[0];
-	revision = (ident >> 28) + 'A';
-	deviceID = (ident >> 12) & 0xFFFF;
-	manufacturerID = (ident >> 1) & 0x07FF;
-	device = getDevice(manufacturerID, deviceID);
-	if ( !device ) {
-		fprintf(stderr, "Unrecognised device: 0x%04X/0x%04X (IDCODE 0x%08lX)\n", manufacturerID, deviceID, ident);
+	i = 0;
+	while ( i < 16 && u.ints[i] ) {
+		i++;
+	}
+	numDevices = i;
+	if ( numDevices == 0 ) {
+		fprintf(stderr, "No devices found in the JTAG chain!\n");
 		exitCode = 5;
 		goto cleanupUsb;
+	} else if ( numDevices == 1 ) {
+		printf("Found one device in the JTAG chain:\n");
+	} else {
+		printf("Found %d devices in the JTAG chain:\n", numDevices);
 	}
-	printf("Found %s %s (rev %c): 0x%08lX\n", manufacturers[device->Manufacturer], device->DeviceID, revision, ident);
+	for ( i = 0; i < numDevices; i++ ) {
+		ident = u.ints[numDevices - 1 - i];
+		revision = (ident >> 28) + 'A';
+		deviceID = (ident >> 12) & 0xFFFF;
+		manufacturerID = (ident >> 1) & 0x07FF;
+		devices[i] = getDevice(manufacturerID, deviceID);
+		if ( !devices[i] ) {
+			printf("  Unrecognised device: 0x%04X/0x%04X (IDCODE 0x%08lX)\n", manufacturerID, deviceID, ident);
+			exitCode = 5;
+			goto cleanupUsb;
+		} else {
+			printf("  Device %d (IDCODE=0x%08lX): %s %s (rev %c)\n", i, ident, manufacturers[devices[i]->Manufacturer], devices[i]->DeviceID, revision);
+		}
+	}
 
-	if ( device->Manufacturer == ATMEL ) {
+	if ( devIndex->count ) {
+		if ( devIndex->ival[0] >= numDevices ) {
+			fprintf(stderr, "There is no device numbered %d!\n", devIndex->ival[0]);
+			exitCode = 5;
+			goto cleanupUsb;
+		}
+		device = devices[devIndex->ival[0]];
+	} else {
+		device = NULL;
+		if ( fuses->count || erase->count ) {
+			fprintf(stderr, "You must select the target device!\n");
+			exitCode = 6;
+			goto cleanupUsb;
+		}
+	}
+
+	if ( device && device->Manufacturer == ATMEL ) {
 		if ( controlMsgRead(deviceHandle, CMD_RW_AVR_FUSES, 0, 0, u.bytes, 4) ) {
 			exitCode = 4;
 			goto cleanupUsb;
@@ -281,6 +315,7 @@ int main(int argc, char **argv) {
 			}
 		} else {
 			fprintf(stderr, "Erasing is only supported on Atmel devices\n");
+			exitCode = 5;
 			goto cleanupUsb;
 		}
 	}
@@ -294,88 +329,100 @@ int main(int argc, char **argv) {
 				exitCode = 7;
 				goto cleanupUsb;
 			}
-			if ( bulkWrite(deviceHandle, CMD_WR_XSVF, &buf) ) {
+			if ( bulkWrite(deviceHandle, CMD_PLAY_XSVF, &buf) ) {
 				exitCode = 8;
 				goto cleanupUsb;
 			}
 		} else if ( !strcmp(fileName + strlen(fileName) - 4, ".hex") ) {
-			if ( device->Manufacturer == ATMEL ) {
-				uint32 extraBytes, numBlocks;
-				printf("Programming Atmel chip using HEX file %s...\n", fileName);
-				if ( bufReadFromIntelHexFile(&buf, fileName) ) {
-					fprintf(stderr, "Cannot load: %s\n", bufStrError());
-					exitCode = 8;
-					goto cleanupBuffer;
-				}
-				numBlocks = (buf.length % BLOCK_SIZE) ?
-					(buf.length / BLOCK_SIZE) + 1 :
-					(buf.length / BLOCK_SIZE);
-				if ( numBlocks > device->NumBlocks ) {
-					fprintf(
-						stderr,
-						"%s contains 0x%08lX bytes which is too big for the %s which only has 0x%08X bytes of flash",
-						fileName,
-						buf.length,
-						device->DeviceID,
-						BLOCK_SIZE * device->NumBlocks
-					);
-					return 2;
-				}
-				extraBytes = BLOCK_SIZE * numBlocks - buf.length;
-				if ( bufAppendConst(&buf, extraBytes, 0xFF, NULL) ) {
-					fprintf(stderr, "%s\n", bufStrError());
-					exitCode = 8;
-					goto cleanupUsb;
-				}
-				if ( bulkWrite(deviceHandle, CMD_WR_AVR_FLASH, &buf) ) {
-					exitCode = 8;
+			if ( device ) {
+				if ( device->Manufacturer == ATMEL ) {
+					uint32 extraBytes, numBlocks;
+					printf("Programming Atmel chip using HEX file %s...\n", fileName);
+					if ( bufReadFromIntelHexFile(&buf, fileName) ) {
+						fprintf(stderr, "Cannot load: %s\n", bufStrError());
+						exitCode = 8;
+						goto cleanupBuffer;
+					}
+					numBlocks = (buf.length % BLOCK_SIZE) ?
+						(buf.length / BLOCK_SIZE) + 1 :
+						(buf.length / BLOCK_SIZE);
+					if ( numBlocks > device->NumBlocks ) {
+						fprintf(
+							stderr,
+							"%s contains 0x%08lX bytes which is too big for the %s which only has 0x%08X bytes of flash",
+							fileName,
+							buf.length,
+							device->DeviceID,
+							BLOCK_SIZE * device->NumBlocks
+						);
+						return 2;
+					}
+					extraBytes = BLOCK_SIZE * numBlocks - buf.length;
+					if ( bufAppendConst(&buf, extraBytes, 0xFF, NULL) ) {
+						fprintf(stderr, "%s\n", bufStrError());
+						exitCode = 8;
+						goto cleanupUsb;
+					}
+					if ( bulkWrite(deviceHandle, CMD_WR_AVR_FLASH, &buf) ) {
+						exitCode = 8;
+						goto cleanupUsb;
+					}
+				} else {
+					fprintf(stderr, "Loading HEX files is only supported on Atmel devices\n");
+					exitCode = 9;
 					goto cleanupUsb;
 				}
 			} else {
-				fprintf(stderr, "Loading HEX files is only supported on Atmel devices\n");
+				fprintf(stderr, "You must select the target device!\n");
 				exitCode = 9;
 				goto cleanupUsb;
 			}
 		} else {
-			fprintf(stderr, "File %s has unrecognised type\n", fileName);
+			fprintf(stderr, "File %s has unrecognised extension\n", fileName);
 			exitCode = 9;
 			goto cleanupUsb;
 		}
-		if ( controlMsgRead(deviceHandle, CMD_RD_IDCODE, 0, 0, u.bytes, 12) ) {
+		if ( controlMsgRead(deviceHandle, CMD_STATUS, 0, 0, u.bytes, 8) ) {
 			exitCode = 10;
 			goto cleanupUsb;
 		}
-		printf("Load operation completed with returncode 0x%08lX, numfails=%lu\n", u.ints[1], u.ints[2]);
+		printf("Load operation completed with returncode 0x%08lX, numfails=%lu\n", u.ints[0], u.ints[1]);
 	}
 
 	if ( save->count ) {
 		const char *fileName = save->filename[0];
 		if ( !strcmp(fileName + strlen(fileName) - 4, ".hex") ) {
-			if ( device->Manufacturer == ATMEL ) {
-				if ( bulkRead(deviceHandle, CMD_RD_AVR_FLASH, &buf, BLOCK_SIZE * device->NumBlocks) ) {
-					exitCode = 7;
-					goto cleanupUsb;
-				}
-				if ( bufWriteToIntelHexFile(&buf, NULL, fileName, 16, true) ) {
-					fprintf(stderr, "Cannot write hex records: %s\n", bufStrError());
-					exitCode = 8;
+			if ( device ) {
+				if ( device->Manufacturer == ATMEL ) {
+					if ( bulkRead(deviceHandle, CMD_RD_AVR_FLASH, &buf, BLOCK_SIZE * device->NumBlocks) ) {
+						exitCode = 7;
+						goto cleanupUsb;
+					}
+					if ( bufWriteToIntelHexFile(&buf, NULL, fileName, 16, true) ) {
+						fprintf(stderr, "Cannot write hex records: %s\n", bufStrError());
+						exitCode = 8;
+						goto cleanupUsb;
+					}
+				} else {
+					fprintf(stderr, "Saving HEX files is only supported on Atmel devices\n");
+					exitCode = 9;
 					goto cleanupUsb;
 				}
 			} else {
-				fprintf(stderr, "Saving HEX files is only supported on Atmel devices\n");
+				fprintf(stderr, "You must select the target device!\n");
 				exitCode = 9;
 				goto cleanupUsb;
 			}
 		} else {
-			fprintf(stderr, "File %s has unrecognised type\n", fileName);
+			fprintf(stderr, "File %s has unrecognised extension\n", fileName);
 			exitCode = 9;
 			goto cleanupUsb;
 		}
-		if ( controlMsgRead(deviceHandle, CMD_RD_IDCODE, 0, 0, u.bytes, 12) ) {
+		if ( controlMsgRead(deviceHandle, CMD_STATUS, 0, 0, u.bytes, 8) ) {
 			exitCode = 10;
 			goto cleanupUsb;
 		}
-		printf("Save operation completed with returncode 0x%08lX, numfails=%lu\n", u.ints[1], u.ints[2]);
+		printf("Save operation completed with returncode 0x%08lX, numfails=%lu\n", u.ints[0], u.ints[1]);
 	}
 
 	cleanupUsb:
@@ -388,5 +435,6 @@ int main(int argc, char **argv) {
 	cleanupArgtable:
 		arg_freetable(argTable, sizeof(argTable)/sizeof(argTable[0]));
 
+	//getchar();
 	return exitCode;
 }

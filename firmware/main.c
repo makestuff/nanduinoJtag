@@ -264,9 +264,11 @@ void jtagWriteInstruction(uint8 cmd) {
 
 // Reset the JTAG TAP state machine and return the IDENT register
 //
-uint32 jtagResetAndGetIdentRegister(void) {
-	uint32 idCode;
+void jtagScanForDevices(uint32 *idCodes, uint8 bufferSpace) {
 
+	uint32 thisID;
+	uint8 i;
+	
 	// Go to Test-Logic-Reset
 	jtagClock(TMS);
 	jtagClock(TMS);
@@ -275,13 +277,33 @@ uint32 jtagResetAndGetIdentRegister(void) {
 	jtagClock(TMS);
 
 	// Go to Run-Test/Idle
-	jtagClock(0);        // Now in Run-Test/Idle
-
-	// Go to Shift-DR
+	jtagClock(0);          // Now in Run-Test/Idle
 	jtagGotoShiftState();  // Now in Shift-DR
-	idCode = jtagExchangeData32(0x00000000, 32);  // Now in Exit1-DR
-	jtagGotoIdleState();          // Now in Run-Test/Idle
-	return idCode;
+	do {
+		thisID = 0x00000000;
+		for ( i = 0; i < 31; i++ ) {
+			if ( jtagClock(0) ) {
+				thisID |= 0x80000000;
+			}
+			thisID >>= 1;
+		}
+		if ( jtagClock(0) ) {
+			thisID |= 0x80000000;
+		}
+		if ( thisID == 0xFFFFFFFF ) {
+			break;
+		}
+		*idCodes++ = thisID; // Stay in Shift-DR
+		bufferSpace--;
+	} while ( bufferSpace );
+	while ( bufferSpace ) {
+		// Zero out the remaining entries
+		//
+		*idCodes++ = 0x00000000;
+		bufferSpace--;
+	}
+	jtagClock(TMS);        // Now in Exit1-DR
+	jtagGotoIdleState();   // Now in Run-Test/Idle
 }
 
 // Reset the JTAG TAP state machine
@@ -630,18 +652,16 @@ ParseStatus gotXSTATE(TAPState value) {
 
 void EVENT_USB_Device_UnhandledControlRequest(void) {
 	switch ( USB_ControlRequest.bRequest ) {
-		case CMD_RD_IDCODE:
+		case CMD_SCAN:
 			if ( USB_ControlRequest.bmRequestType == (REQDIR_DEVICETOHOST | REQTYPE_VENDOR) ) {
 				// Read IDCODE, status, failure count
-				uint32 response[3];
+				uint32 response[16];
 				DDRB = TCK | TMS | TDI;
-				response[0] = jtagResetAndGetIdentRegister();
-				response[1] = m_status;
-				response[2] = m_failures;
+				jtagScanForDevices(response, 16);
 				PORTB = 0x00;
 				DDRB = 0x00;
 				Endpoint_ClearSETUP();
-				Endpoint_Write_Control_Stream_LE(response, 12);
+				Endpoint_Write_Control_Stream_LE(response, 64);
 				Endpoint_ClearStatusStage();
 			}
 			break;
@@ -667,7 +687,8 @@ void EVENT_USB_Device_UnhandledControlRequest(void) {
 				usartSendLongHex(((uint32)USB_ControlRequest.wValue << 16) + USB_ControlRequest.wIndex);
 				usartSendByte('\n');
 				DDRB = TCK | TMS | TDI;
-				jtagResetAndGetIdentRegister();
+				jtagReset();           // Now in Test-Logic-Reset
+				jtagClock(0);          // Now in Run-Test/Idle
 				avrResetEnable(1);
 				avrProgModeEnable(1);
 				avrWriteFuses(((uint32)USB_ControlRequest.wValue << 16) + USB_ControlRequest.wIndex);
@@ -689,7 +710,8 @@ void EVENT_USB_Device_UnhandledControlRequest(void) {
 				Endpoint_ClearSETUP();
 				Endpoint_ClearStatusStage();
 				DDRB = TCK | TMS | TDI;
-				jtagResetAndGetIdentRegister();
+				jtagReset();           // Now in Test-Logic-Reset
+				jtagClock(0);          // Now in Run-Test/Idle
 				avrResetEnable(1);
 				avrProgModeEnable(1);
 
@@ -729,7 +751,8 @@ void EVENT_USB_Device_UnhandledControlRequest(void) {
 				Endpoint_ClearSETUP();
 				Endpoint_ClearStatusStage();
 				DDRB = TCK | TMS | TDI;
-				jtagResetAndGetIdentRegister();
+				jtagReset();           // Now in Test-Logic-Reset
+				jtagClock(0);          // Now in Run-Test/Idle
 				avrResetEnable(1);
 				avrProgModeEnable(1);
 
@@ -764,7 +787,8 @@ void EVENT_USB_Device_UnhandledControlRequest(void) {
 			if ( USB_ControlRequest.bmRequestType == (REQDIR_HOSTTODEVICE | REQTYPE_VENDOR) ) {
 				// Erase AVR flash
 				DDRB = TCK | TMS | TDI;
-				jtagResetAndGetIdentRegister();
+				jtagReset();           // Now in Test-Logic-Reset
+				jtagClock(0);          // Now in Run-Test/Idle
 				avrResetEnable(1);
 				avrProgModeEnable(1);
 				avrChipErase();
@@ -776,7 +800,7 @@ void EVENT_USB_Device_UnhandledControlRequest(void) {
 				Endpoint_ClearStatusStage();
 			}
 			break;
-		case CMD_WR_XSVF:
+		case CMD_PLAY_XSVF:
 			if ( USB_ControlRequest.bmRequestType == (REQDIR_HOSTTODEVICE | REQTYPE_VENDOR) ) {
 				uint8 buffer[CHUNK_SIZE];
 				uint32 bytesRemaining;
@@ -825,6 +849,16 @@ void EVENT_USB_Device_UnhandledControlRequest(void) {
 				Endpoint_ClearOUT();
 				PORTB = 0x00;
 				DDRB = 0x00;
+			}
+			break;
+		case CMD_STATUS:
+			if ( USB_ControlRequest.bmRequestType == (REQDIR_DEVICETOHOST | REQTYPE_VENDOR) ) {
+				uint32 response[2];
+				response[0] = m_status;
+				response[1] = m_failures;
+				Endpoint_ClearSETUP();
+				Endpoint_Write_Control_Stream_LE(response, 8);
+				Endpoint_ClearStatusStage();
 			}
 			break;
 	}

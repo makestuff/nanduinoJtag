@@ -18,7 +18,7 @@
 #define COMMANDS_H
 
 typedef enum {
-	CMD_RD_IDCODE = 0x80,
+	CMD_SCAN = 0x80,
 	CMD_RW_AVR_FUSES,
 	CMD_RD_AVR_FLASH,
 	CMD_WR_AVR_FLASH,
@@ -26,7 +26,8 @@ typedef enum {
 	CMD_RSVD1,
 	CMD_RSVD2,
 	CMD_RSVD3,
-	CMD_WR_XSVF
+	CMD_PLAY_XSVF,
+	CMD_STATUS
 } CommandByte;
 
 #endif

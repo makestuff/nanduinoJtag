@@ -92,6 +92,7 @@ void EVENT_USB_Device_ConfigurationChanged(void) {
 #define INS_PROG_PAGELOAD 0x06
 #define INS_PROG_PAGEREAD 0x07
 #define INS_AVR_RESET     0x0C
+#define INS_BYPASS        0x0F
 
 // AVR Commands
 #define CMD_LOAD_DATA_HIGH_BYTE    0x1700
@@ -254,15 +255,20 @@ uint32 jtagExchangeData32(uint32 data, uint8 numBits) {
 }
 
 // Write the specified 4-bit JTAG instruction
+// TODO: Currently this assumes the instruction is meant for the first device in the chain,
+//       and also that the remaining devices have a combined IR length of eight.
 //
 void jtagWriteInstruction(uint8 cmd) {
-	jtagClock(TMS);      // Now in Select-DR Scan
-	jtagGotoShiftState();  // Now in Shift-IR
+	jtagClock(TMS);             // Now in Select-DR Scan
+	jtagGotoShiftState();       // Now in Shift-IR
+	jtagExchangeData(0xFF);     // Put other devices in BYPASS
 	jtagExchangeData8(cmd, 4);  // Now in Exit1-IR
-	jtagGotoIdleState();          // Now in Run-Test/Idle
+	jtagGotoIdleState();        // Now in Run-Test/Idle
 }
 
 // Reset the JTAG TAP state machine and return the IDENT register
+// TODO: Count the number of devices and have the caller store it...this will be useful for
+//       working out how many extra bits need to be shifted in the BYPASS mode.
 //
 void jtagScanForDevices(uint32 *idCodes, uint8 bufferSpace) {
 
@@ -347,9 +353,19 @@ void avrProgModeEnable(uint8 enable) {
 //
 uint16 avrWriteCommand(uint16 cmd) {
 	uint16 response;
-	jtagGotoShiftState();  // Now in Shift-DR
-	response = jtagExchangeData16(cmd, 15);  // Now in Exit1-DR
-	jtagGotoIdleState();          // Now in Run-Test/Idle
+	jtagWriteInstruction(INS_PROG_COMMANDS);        // Now in Run-Test/Idle
+	jtagGotoShiftState();                           // Now in Shift-DR
+	response = jtagExchangeData16(cmd, 15);         // Now in Exit1-DR
+	jtagGotoIdleState();                            // Now in Run-Test/Idle
+
+	// TODO: This makes the BAD assumption that there is exactly one device after this in the chain.
+	jtagWriteInstruction(INS_BYPASS);               // Shift in BYPASS instruction. Now in Run-Test/Idle
+	jtagGotoShiftState();                           // Now in Shift-DR
+	response >>= 1;                                 // One extra device means clocking one extra bit whilst in BYPASS
+	if ( jtagClock(TMS) ) {                         // Now in Exit1-DR
+		response |= 0x8000;
+	}
+	jtagGotoIdleState();                            // Now in Run-Test/Idle
 	return response;
 }
 
@@ -362,7 +378,6 @@ uint16 avrWriteCommand(uint16 cmd) {
 //
 uint32 avrReadFuses(void) {
 	uint32 result = 0;
-	jtagWriteInstruction(INS_PROG_COMMANDS);
 	avrWriteCommand(CMD_8A_ENTER_FUSE_READ);
 	avrWriteCommand(CMD_8F_READ_FUSES);
 	result |= avrWriteCommand(CMD_8F_READ_EXT_BYTE) & 0x00FF;
@@ -383,7 +398,6 @@ uint32 avrReadFuses(void) {
 //   Bits 24-31: Fuse ext. byte
 //
 void avrWriteFuses(uint32 fuses) {
-	jtagWriteInstruction(INS_PROG_COMMANDS);
 	avrWriteCommand(CMD_6A_ENTER_FUSE_WRITE);
 
 	avrWriteCommand(CMD_LOAD_DATA_LOW_BYTE | ((fuses>>24)&0xFF));
@@ -420,7 +434,6 @@ void avrWriteFuses(uint32 fuses) {
 // Begin reading the specified 128-byte page
 //
 void avrReadFlashBegin(uint16 page) {
-	jtagWriteInstruction(INS_PROG_COMMANDS);
 	avrWriteCommand(CMD_3A_ENTER_FLASH_READ);
 	avrWriteCommand(CMD_LOAD_ADDRESS_HIGH_BYTE | ((page&0x7F)>>2));
 	avrWriteCommand(CMD_LOAD_ADDRESS_LOW_BYTE | ((page&0x03)<<6));
@@ -428,13 +441,13 @@ void avrReadFlashBegin(uint16 page) {
 
 	// Throw away the first eight bits
 	jtagGotoShiftState();  // Now in Shift-DR
+	jtagClock(0);          // TODO: This makes the BAD assumption that there is exactly one extra device in the chain.
 	jtagExchangeData(0x00);
 }
 
 // Begin writing the specified 128-byte page
 //
 void avrWriteFlashBegin(uint16 page) {
-	jtagWriteInstruction(INS_PROG_COMMANDS);
 	avrWriteCommand(CMD_2A_ENTER_FLASH_WRITE);
 	avrWriteCommand(CMD_LOAD_ADDRESS_HIGH_BYTE | ((page&0x7F)>>2));
 	avrWriteCommand(CMD_LOAD_ADDRESS_LOW_BYTE | ((page&0x03)<<6));
@@ -444,7 +457,6 @@ void avrWriteFlashBegin(uint16 page) {
 
 void avrWriteFlashEnd(void) {
 	jtagGotoIdleState();          // Now in Run-Test/Idle
-	jtagWriteInstruction(INS_PROG_COMMANDS);
 	avrWriteCommand(CMD_2G_WRITE_FLASH_PAGE);
 	avrWriteCommand(CMD_2G_WRITE_FLASH_PAGE & 0xFDFF);
 	avrWriteCommand(CMD_2G_WRITE_FLASH_PAGE);
@@ -455,7 +467,6 @@ void avrWriteFlashEnd(void) {
 // Erase the device entirely
 //
 void avrChipErase(void) {
-	jtagWriteInstruction(INS_PROG_COMMANDS);
 	avrWriteCommand(CMD_1A_CHIP_ERASE_1);
 	avrWriteCommand(CMD_1A_CHIP_ERASE_2);
 	avrWriteCommand(CMD_1A_CHIP_ERASE_3);

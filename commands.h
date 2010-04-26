@@ -27,7 +27,8 @@ typedef enum {
 	CMD_RSVD2,
 	CMD_RSVD3,
 	CMD_PLAY_XSVF,
-	CMD_STATUS
+	CMD_STATUS,
+	CMD_SET_IRLENS
 } CommandByte;
 
 #endif

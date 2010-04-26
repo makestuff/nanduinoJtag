@@ -36,6 +36,8 @@ static uint32 m_idleCycles;
 	static uint8  m_repeats;
 #endif
 static uint32 m_failures;
+static uint8 m_irLens[16];
+static uint8 m_numDevices;
 
 int main(void) {
 	MCUSR &= ~(1 << WDRF);
@@ -254,26 +256,31 @@ uint32 jtagExchangeData32(uint32 data, uint8 numBits) {
 	return result;
 }
 
-// Write the specified 4-bit JTAG instruction
-// TODO: Currently this assumes the instruction is meant for the first device in the chain,
-//       and also that the remaining devices have a combined IR length of eight.
+// Write the specified JTAG instruction
+// TODO: Currently this assumes the instruction is meant for the first device in
+//       the chain, and also that the device has fewer than 256 instructions.
 //
-void jtagWriteInstruction(uint8 cmd) {
-	jtagClock(TMS);             // Now in Select-DR Scan
-	jtagGotoShiftState();       // Now in Shift-IR
-	jtagExchangeData(0xFF);     // Put other devices in BYPASS
-	jtagExchangeData8(cmd, 4);  // Now in Exit1-IR
-	jtagGotoIdleState();        // Now in Run-Test/Idle
+void jtagWriteInstruction(uint8 cmd, uint8 len) {
+	uint8 i, j, irLen;
+	jtagClock(TMS);                         // Now in Select-DR Scan
+	jtagGotoShiftState();                   // Now in Shift-IR
+	for ( i = 1; i < m_numDevices; i++ ) {  // Put remaining devices (if any) in BYPASS
+		irLen = m_irLens[i];
+		for ( j = 0; j < irLen; j++ ) {
+			jtagClock(TDI);
+		}
+	}
+	jtagExchangeData8(cmd, len);            // Now in Exit1-IR
+	jtagGotoIdleState();                    // Now in Run-Test/Idle
 }
 
 // Reset the JTAG TAP state machine and return the IDENT register
-// TODO: Count the number of devices and have the caller store it...this will be useful for
-//       working out how many extra bits need to be shifted in the BYPASS mode.
 //
-void jtagScanForDevices(uint32 *idCodes, uint8 bufferSpace) {
+uint8 jtagScanForDevices(uint32 *idCodes, uint8 bufferSpace) {
 
 	uint32 thisID;
 	uint8 i;
+	uint8 count = 0;
 	
 	// Go to Test-Logic-Reset
 	jtagClock(TMS);
@@ -300,6 +307,7 @@ void jtagScanForDevices(uint32 *idCodes, uint8 bufferSpace) {
 			break;
 		}
 		*idCodes++ = thisID; // Stay in Shift-DR
+		count++;
 		bufferSpace--;
 	} while ( bufferSpace );
 	while ( bufferSpace ) {
@@ -310,6 +318,7 @@ void jtagScanForDevices(uint32 *idCodes, uint8 bufferSpace) {
 	}
 	jtagClock(TMS);        // Now in Exit1-DR
 	jtagGotoIdleState();   // Now in Run-Test/Idle
+	return count;
 }
 
 // Reset the JTAG TAP state machine
@@ -326,7 +335,7 @@ void jtagReset(void) {
 // Set the RESET state of the device
 //
 void avrResetEnable(uint8 enable) {
-	jtagWriteInstruction(INS_AVR_RESET);
+	jtagWriteInstruction(INS_AVR_RESET, 4);
 	jtagGotoShiftState();    // Now in Shift-DR
 	if ( enable ) {
 		jtagClock(TDI|TMS);  // Now in Exit1-DR
@@ -339,7 +348,7 @@ void avrResetEnable(uint8 enable) {
 // Enable/disable the programming mode by writing a magic value
 //
 void avrProgModeEnable(uint8 enable) {
-	jtagWriteInstruction(INS_PROG_ENABLE);
+	jtagWriteInstruction(INS_PROG_ENABLE, 4);
 	jtagGotoShiftState();  // Now in Shift-DR
 	if ( enable ) {
 		jtagExchangeData16(0xA370, 16);  // Magic word! Now in Exit1-DR
@@ -353,19 +362,30 @@ void avrProgModeEnable(uint8 enable) {
 //
 uint16 avrWriteCommand(uint16 cmd) {
 	uint16 response;
-	jtagWriteInstruction(INS_PROG_COMMANDS);        // Now in Run-Test/Idle
+	uint8 numBits;
+	jtagWriteInstruction(INS_PROG_COMMANDS, 4);     // Now in Run-Test/Idle
 	jtagGotoShiftState();                           // Now in Shift-DR
 	response = jtagExchangeData16(cmd, 15);         // Now in Exit1-DR
 	jtagGotoIdleState();                            // Now in Run-Test/Idle
 
-	// TODO: This makes the BAD assumption that there is exactly one device after this in the chain.
-	jtagWriteInstruction(INS_BYPASS);               // Shift in BYPASS instruction. Now in Run-Test/Idle
-	jtagGotoShiftState();                           // Now in Shift-DR
-	response >>= 1;                                 // One extra device means clocking one extra bit whilst in BYPASS
-	if ( jtagClock(TMS) ) {                         // Now in Exit1-DR
-		response |= 0x8000;
+	numBits = m_numDevices - 1;
+	if ( numBits ) {
+		jtagWriteInstruction(INS_BYPASS, 4);          // Shift in BYPASS instruction. Now in Run-Test/Idle
+		jtagGotoShiftState();                         // Now in Shift-DR
+		numBits--;
+		while ( numBits ) {
+			response >>= 1;                             // One extra device means clocking one extra bit whilst in BYPASS
+			if ( jtagClock(0) ) {                       // Now in Exit1-DR
+				response |= 0x8000;
+			}
+			numBits--;
+		}
+		response >>= 1;                               // One extra device means clocking one extra bit whilst in BYPASS
+		if ( jtagClock(TMS) ) {                       // Now in Exit1-DR
+			response |= 0x8000;
+		}
+		jtagGotoIdleState();                          // Now in Run-Test/Idle
 	}
-	jtagGotoIdleState();                            // Now in Run-Test/Idle
 	return response;
 }
 
@@ -392,7 +412,7 @@ uint32 avrReadFuses(void) {
 
 // Accepts a long-word:
 //
-//   Bits 0-7  : Lock bits (TODO: implement lock bits)
+//   Bits 0-7  : Lock bits
 //   Bits 8-15 : Fuse low byte
 //   Bits 16-23: Fuse high byte
 //   Bits 24-31: Fuse ext. byte
@@ -434,14 +454,23 @@ void avrWriteFuses(uint32 fuses) {
 // Begin reading the specified 128-byte page
 //
 void avrReadFlashBegin(uint16 page) {
+	uint8 numBits;
 	avrWriteCommand(CMD_3A_ENTER_FLASH_READ);
 	avrWriteCommand(CMD_LOAD_ADDRESS_HIGH_BYTE | ((page&0x7F)>>2));
 	avrWriteCommand(CMD_LOAD_ADDRESS_LOW_BYTE | ((page&0x03)<<6));
-	jtagWriteInstruction(INS_PROG_PAGEREAD);
+	jtagWriteInstruction(INS_PROG_PAGEREAD, 4);
 
+	// Each extra device in the chain introduces a one-bit delay, so 
+	// clock the output data forward to compensate:
+	numBits = m_numDevices - 1;
+	while ( numBits ) {
+		jtagClock(0);
+		numBits--;
+	}
+	
 	// Throw away the first eight bits
 	jtagGotoShiftState();  // Now in Shift-DR
-	jtagClock(0);          // TODO: This makes the BAD assumption that there is exactly one extra device in the chain.
+	
 	jtagExchangeData(0x00);
 }
 
@@ -451,7 +480,7 @@ void avrWriteFlashBegin(uint16 page) {
 	avrWriteCommand(CMD_2A_ENTER_FLASH_WRITE);
 	avrWriteCommand(CMD_LOAD_ADDRESS_HIGH_BYTE | ((page&0x7F)>>2));
 	avrWriteCommand(CMD_LOAD_ADDRESS_LOW_BYTE | ((page&0x03)<<6));
-	jtagWriteInstruction(INS_PROG_PAGELOAD);
+	jtagWriteInstruction(INS_PROG_PAGELOAD, 4);
 	jtagGotoShiftState();  // Now in Shift-DR...ready to accept 128 bytes
 }
 
@@ -668,7 +697,7 @@ void EVENT_USB_Device_UnhandledControlRequest(void) {
 				// Read IDCODE, status, failure count
 				uint32 response[16];
 				DDRB = TCK | TMS | TDI;
-				jtagScanForDevices(response, 16);
+				m_numDevices = jtagScanForDevices(response, 16);
 				PORTB = 0x00;
 				DDRB = 0x00;
 				Endpoint_ClearSETUP();
@@ -694,9 +723,6 @@ void EVENT_USB_Device_UnhandledControlRequest(void) {
 				Endpoint_ClearStatusStage();
 			} else if ( USB_ControlRequest.bmRequestType == (REQDIR_HOSTTODEVICE | REQTYPE_VENDOR) ) {
 				// Write AVR fuses
-				usartSendFlashString(PSTR("Setting fuses to "));
-				usartSendLongHex(((uint32)USB_ControlRequest.wValue << 16) + USB_ControlRequest.wIndex);
-				usartSendByte('\n');
 				DDRB = TCK | TMS | TDI;
 				jtagReset();           // Now in Test-Logic-Reset
 				jtagClock(0);          // Now in Run-Test/Idle
@@ -870,6 +896,19 @@ void EVENT_USB_Device_UnhandledControlRequest(void) {
 				Endpoint_ClearSETUP();
 				Endpoint_Write_Control_Stream_LE(response, 8);
 				Endpoint_ClearStatusStage();
+			}
+			break;
+		case CMD_SET_IRLENS:
+			if ( USB_ControlRequest.bmRequestType == (REQDIR_HOSTTODEVICE | REQTYPE_VENDOR) ) {
+				uint8 i;
+				Endpoint_ClearSETUP();
+				if ( m_numDevices > 0 && m_numDevices <= 16 && m_numDevices == (uint8)USB_ControlRequest.wValue ) {
+					Endpoint_Read_Control_Stream_LE(m_irLens, m_numDevices);
+					for ( i = m_numDevices; i < 16; i++ ) {
+						m_irLens[i] = 0x00;
+					}
+					Endpoint_ClearStatusStage();
+				}
 			}
 			break;
 	}

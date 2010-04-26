@@ -48,6 +48,7 @@ static const char *manufacturers[] = {
 typedef struct {
 	ManufacturerIndex Manufacturer;
 	const char *DeviceID;
+	uint8 IRLen;
 	uint16 NumBlocks;
 } Device;
 typedef enum {
@@ -55,8 +56,8 @@ typedef enum {
 	XC9572
 } DeviceIndex;
 static Device devices[] = {
-	{ATMEL, "ATMEGA162", 16384/BLOCK_SIZE},
-	{XILINX, "XC9572", 0}
+	{ATMEL,  "ATMEGA162", 4, 16384/BLOCK_SIZE},
+	{XILINX, "XC9572",    8, 0}
 };
 
 const Device *getDevice(uint16 manufacturerID, uint16 deviceID) {
@@ -186,7 +187,7 @@ int main(int argc, char **argv) {
 	uint8 revision;
 	const Device* devices[16];
 	const Device *device = NULL;
-	uint8 numDevices, i;
+	uint8 numDevices, firstUnrecognised, i;
 	UsbDeviceHandle *deviceHandle;
 	Buffer buf;
 
@@ -218,7 +219,7 @@ int main(int argc, char **argv) {
 
 	if ( bufInitialise(&buf, 1024, 0xFF) != BUF_SUCCESS ) {
 		fprintf(stderr, "Cannot allocate buffer: %s\n", bufStrError());
-		exitCode = 6;
+		exitCode = 3;
 		goto cleanupArgtable;
 	}
 
@@ -226,14 +227,14 @@ int main(int argc, char **argv) {
 	returnCode = usbOpenDevice(0x03EB, 0x3002, 1, 0, 0, &deviceHandle);
 	if ( returnCode ) {
 		fprintf(stderr, "usbOpenDevice() failed returnCode %d: %s\n", returnCode, usbStrError());
-		exitCode = 3;
+		exitCode = 4;
 		goto cleanupBuffer;
 	}
 
 	usb_clear_halt(deviceHandle, 2);
 
 	if ( controlMsgRead(deviceHandle, CMD_SCAN, 0, 0, u.bytes, 64) ) {
-		exitCode = 4;
+		exitCode = 5;
 		goto cleanupUsb;
 	}
 	i = 0;
@@ -243,13 +244,14 @@ int main(int argc, char **argv) {
 	numDevices = i;
 	if ( numDevices == 0 ) {
 		fprintf(stderr, "No devices found in the JTAG chain!\n");
-		exitCode = 5;
+		exitCode = 6;
 		goto cleanupUsb;
 	} else if ( numDevices == 1 ) {
 		printf("Found one device in the JTAG chain:\n");
 	} else {
 		printf("Found %d devices in the JTAG chain:\n", numDevices);
 	}
+	firstUnrecognised = numDevices;
 	for ( i = 0; i < numDevices; i++ ) {
 		ident = u.ints[numDevices - 1 - i];
 		revision = (ident >> 28) + 'A';
@@ -257,18 +259,42 @@ int main(int argc, char **argv) {
 		manufacturerID = (ident >> 1) & 0x07FF;
 		devices[i] = getDevice(manufacturerID, deviceID);
 		if ( !devices[i] ) {
-			printf("  Unrecognised device: 0x%04X/0x%04X (IDCODE 0x%08lX)\n", manufacturerID, deviceID, ident);
-			exitCode = 5;
-			goto cleanupUsb;
+			if ( firstUnrecognised == numDevices ) {
+				firstUnrecognised = i;
+			}
+			printf("  Device %d (IDCODE=0x%08lX): Unrecognised device 0x%04X/0x%04X\n", i, ident, manufacturerID, deviceID);
 		} else {
 			printf("  Device %d (IDCODE=0x%08lX): %s %s (rev %c)\n", i, ident, manufacturers[devices[i]->Manufacturer], devices[i]->DeviceID, revision);
 		}
+	}
+	for ( i = 0; i < numDevices; i++ ) {
+		if ( !devices[i] ) {
+			u.bytes[i] = 0xFF;  // Assume very long irLen
+		} else {
+			u.bytes[i] = devices[i]->IRLen;
+		}
+	}
+	if ( controlMsgWrite(deviceHandle, CMD_SET_IRLENS, numDevices, 0, u.bytes, numDevices) ) {
+		fprintf(stderr, "Call to CMD_SET_IRLENS failed; this should not happen!\n");
+		exitCode = 7;
+		goto cleanupUsb;
+	}
+
+	if ( devIndex->count && devIndex->ival[0] != 0 ) {
+		fprintf(stderr, "This version of %s can only directly address the first device in the JTAG chain\n", progName);
+		exitCode = 8;
+		goto cleanupUsb;
 	}
 
 	if ( devIndex->count ) {
 		if ( devIndex->ival[0] >= numDevices ) {
 			fprintf(stderr, "There is no device numbered %d!\n", devIndex->ival[0]);
-			exitCode = 5;
+			exitCode = 9;
+			goto cleanupUsb;
+		}
+		if ( devIndex->ival[0] >= firstUnrecognised ) {
+			fprintf(stderr, "Device %d is either itself unrecognised or is preceded by an unrecognised device.\n", devIndex->ival[0]);
+			exitCode = 10;
 			goto cleanupUsb;
 		}
 		device = devices[devIndex->ival[0]];
@@ -276,14 +302,14 @@ int main(int argc, char **argv) {
 		device = NULL;
 		if ( fuses->count || erase->count ) {
 			fprintf(stderr, "You must select the target device!\n");
-			exitCode = 6;
+			exitCode = 11;
 			goto cleanupUsb;
 		}
 	}
 
 	if ( device && device->Manufacturer == ATMEL ) {
 		if ( controlMsgRead(deviceHandle, CMD_RW_AVR_FUSES, 0, 0, u.bytes, 4) ) {
-			exitCode = 4;
+			exitCode = 12;
 			goto cleanupUsb;
 		}
 		printf("Fuses = 0x%08lX (EX:HI:LO:LK)\n", u.ints[0]);
@@ -297,7 +323,7 @@ int main(int argc, char **argv) {
 								 fuses->ival[0] & 0xFFFF,  // wIndex: lowByte<<8 | lockBits
 								 NULL, 0) )
 			{
-				exitCode = 4;
+				exitCode = 13;
 				goto cleanupUsb;
 			}
 		} else {
@@ -310,12 +336,12 @@ int main(int argc, char **argv) {
 		if ( device->Manufacturer == ATMEL ) {
 			printf("Erasing chip...\n");
 			if ( controlMsgWrite(deviceHandle, CMD_ERASE_AVR_FLASH, 0, 0, NULL, 0) ) {
-				exitCode = 4;
+				exitCode = 14;
 				goto cleanupUsb;
 			}
 		} else {
 			fprintf(stderr, "Erasing is only supported on Atmel devices\n");
-			exitCode = 5;
+			exitCode = 15;
 			goto cleanupUsb;
 		}
 	}
@@ -326,11 +352,11 @@ int main(int argc, char **argv) {
 			printf("Playing XSVF file %s...\n", fileName);
 			if ( bufAppendFromBinaryFile(&buf, fileName) ) {
 				fprintf(stderr, "Cannot load: %s\n", bufStrError());
-				exitCode = 7;
+				exitCode = 16;
 				goto cleanupUsb;
 			}
 			if ( bulkWrite(deviceHandle, CMD_PLAY_XSVF, &buf) ) {
-				exitCode = 8;
+				exitCode = 17;
 				goto cleanupUsb;
 			}
 		} else if ( !strcmp(fileName + strlen(fileName) - 4, ".hex") ) {
@@ -340,7 +366,7 @@ int main(int argc, char **argv) {
 					printf("Programming Atmel chip using HEX file %s...\n", fileName);
 					if ( bufReadFromIntelHexFile(&buf, fileName) ) {
 						fprintf(stderr, "Cannot load: %s\n", bufStrError());
-						exitCode = 8;
+						exitCode = 18;
 						goto cleanupBuffer;
 					}
 					numBlocks = (buf.length % BLOCK_SIZE) ?
@@ -355,35 +381,36 @@ int main(int argc, char **argv) {
 							device->DeviceID,
 							BLOCK_SIZE * device->NumBlocks
 						);
-						return 2;
+						exitCode = 19;
+						goto cleanupUsb;
 					}
 					extraBytes = BLOCK_SIZE * numBlocks - buf.length;
 					if ( bufAppendConst(&buf, extraBytes, 0xFF, NULL) ) {
 						fprintf(stderr, "%s\n", bufStrError());
-						exitCode = 8;
+						exitCode = 20;
 						goto cleanupUsb;
 					}
 					if ( bulkWrite(deviceHandle, CMD_WR_AVR_FLASH, &buf) ) {
-						exitCode = 8;
+						exitCode = 21;
 						goto cleanupUsb;
 					}
 				} else {
 					fprintf(stderr, "Loading HEX files is only supported on Atmel devices\n");
-					exitCode = 9;
+					exitCode = 22;
 					goto cleanupUsb;
 				}
 			} else {
 				fprintf(stderr, "You must select the target device!\n");
-				exitCode = 9;
+				exitCode = 23;
 				goto cleanupUsb;
 			}
 		} else {
 			fprintf(stderr, "File %s has unrecognised extension\n", fileName);
-			exitCode = 9;
+			exitCode = 24;
 			goto cleanupUsb;
 		}
 		if ( controlMsgRead(deviceHandle, CMD_STATUS, 0, 0, u.bytes, 8) ) {
-			exitCode = 10;
+			exitCode = 25;
 			goto cleanupUsb;
 		}
 		printf("Load operation completed with returncode 0x%08lX, numfails=%lu\n", u.ints[0], u.ints[1]);
@@ -395,31 +422,31 @@ int main(int argc, char **argv) {
 			if ( device ) {
 				if ( device->Manufacturer == ATMEL ) {
 					if ( bulkRead(deviceHandle, CMD_RD_AVR_FLASH, &buf, BLOCK_SIZE * device->NumBlocks) ) {
-						exitCode = 7;
+						exitCode = 26;
 						goto cleanupUsb;
 					}
 					if ( bufWriteToIntelHexFile(&buf, NULL, fileName, 16, true) ) {
 						fprintf(stderr, "Cannot write hex records: %s\n", bufStrError());
-						exitCode = 8;
+						exitCode = 27;
 						goto cleanupUsb;
 					}
 				} else {
 					fprintf(stderr, "Saving HEX files is only supported on Atmel devices\n");
-					exitCode = 9;
+					exitCode = 28;
 					goto cleanupUsb;
 				}
 			} else {
 				fprintf(stderr, "You must select the target device!\n");
-				exitCode = 9;
+				exitCode = 29;
 				goto cleanupUsb;
 			}
 		} else {
 			fprintf(stderr, "File %s has unrecognised extension\n", fileName);
-			exitCode = 9;
+			exitCode = 30;
 			goto cleanupUsb;
 		}
 		if ( controlMsgRead(deviceHandle, CMD_STATUS, 0, 0, u.bytes, 8) ) {
-			exitCode = 10;
+			exitCode = 31;
 			goto cleanupUsb;
 		}
 		printf("Save operation completed with returncode 0x%08lX, numfails=%lu\n", u.ints[0], u.ints[1]);

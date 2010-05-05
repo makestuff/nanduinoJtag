@@ -297,7 +297,7 @@ MATH_LIB = -lm
 #     For a directory that has spaces, enclose it in quotes.
 EXTRALIBDIRS = 
 
-OTHER_LIBS = ../../../libs/libxsvf/lib/avr/libxsvf.a ../../../libs/avrutil/lib/avr/avrutil.a
+OTHER_LIBS = ../../../libs/libxsvf/lib/avr/libxsvf.a ../../../libs/avrutil/lib/avr/at90usb162/avrutil.a
 
 
 #---------------- External Memory Options ----------------

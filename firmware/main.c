@@ -45,7 +45,7 @@ int main(void) {
 	clock_prescale_set(clock_div_1);
 	PORTB = 0x00;
 	DDRB = 0x00;
-	usartInit();
+	usartInit(38400);
 	usartSendFlashString(PSTR("NanduinoJTAG...\n"));
 	USB_Init();
 	

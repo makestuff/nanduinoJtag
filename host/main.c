@@ -364,7 +364,7 @@ int main(int argc, char **argv) {
 				if ( device->Manufacturer == ATMEL ) {
 					uint32 extraBytes, numBlocks;
 					printf("Programming Atmel chip using HEX file %s...\n", fileName);
-					if ( bufReadFromIntelHexFile(&buf, fileName) ) {
+					if ( bufReadFromIntelHexFile(&buf, NULL, fileName) ) {
 						fprintf(stderr, "Cannot load: %s\n", bufStrError());
 						exitCode = 18;
 						goto cleanupBuffer;

@@ -459,6 +459,7 @@ void avrReadFlashBegin(uint16 page) {
 	avrWriteCommand(CMD_LOAD_ADDRESS_HIGH_BYTE | ((page&0x7F)>>2));
 	avrWriteCommand(CMD_LOAD_ADDRESS_LOW_BYTE | ((page&0x03)<<6));
 	jtagWriteInstruction(INS_PROG_PAGEREAD, 4);
+	jtagGotoShiftState();  // Now in Shift-DR
 
 	// Each extra device in the chain introduces a one-bit delay, so 
 	// clock the output data forward to compensate:
@@ -469,8 +470,6 @@ void avrReadFlashBegin(uint16 page) {
 	}
 	
 	// Throw away the first eight bits
-	jtagGotoShiftState();  // Now in Shift-DR
-	
 	jtagExchangeData(0x00);
 }
 

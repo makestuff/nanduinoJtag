@@ -47,6 +47,7 @@ int main(void) {
 	DDRB = 0x00;
 	usartInit(38400);
 	usartSendFlashString(PSTR("NanduinoJTAG...\n"));
+	sei();
 	USB_Init();
 	
 	for ( ; ; ) {
@@ -550,16 +551,16 @@ ParseStatus gotXSDRSIZE(uint16 value) {
 
 inline void delay(uint32 us) {
 	while ( us-- ) {
-		asm("nop");
-		asm("nop");
-		asm("nop");
-		asm("nop");
-		asm("nop");
-		asm("nop");
-		asm("nop");
-		asm("nop");
-		asm("nop");
-		asm("nop");
+		__asm__("nop");
+		__asm__("nop");
+		__asm__("nop");
+		__asm__("nop");
+		__asm__("nop");
+		__asm__("nop");
+		__asm__("nop");
+		__asm__("nop");
+		__asm__("nop");
+		__asm__("nop");
 	}
 }
 

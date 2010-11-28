@@ -15,42 +15,42 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 ../../libs/argtypes:
-	wget http://github.com/makestuff/argtypes/tarball/master
+	wget --no-check-certificate http://github.com/makestuff/argtypes/tarball/master
 	tar xvzf makestuff-argtypes-*.tar.gz
 	rm makestuff-argtypes-*.tar.gz
 	mkdir -p ../../libs
 	mv makestuff-argtypes* ../../libs/argtypes
 
 ../../libs/avrutil:
-	wget http://github.com/makestuff/avrutil/tarball/master
+	wget --no-check-certificate http://github.com/makestuff/avrutil/tarball/master
 	tar xvzf makestuff-avrutil-*.tar.gz
 	rm makestuff-avrutil-*.tar.gz
 	mkdir -p ../../libs
 	mv makestuff-avrutil* ../../libs/avrutil
 
 ../../libs/buffer:
-	wget http://github.com/makestuff/buffer/tarball/master
+	wget --no-check-certificate http://github.com/makestuff/buffer/tarball/master
 	tar xvzf makestuff-buffer-*.tar.gz
 	rm makestuff-buffer-*.tar.gz
 	mkdir -p ../../libs
 	mv makestuff-buffer* ../../libs/buffer
 
 ../../libs/dump:
-	wget http://github.com/makestuff/dump/tarball/master
+	wget --no-check-certificate http://github.com/makestuff/dump/tarball/master
 	tar xvzf makestuff-dump-*.tar.gz
 	rm makestuff-dump-*.tar.gz
 	mkdir -p ../../libs
 	mv makestuff-dump* ../../libs/dump
 
 ../../libs/libxsvf:
-	wget http://github.com/makestuff/libxsvf/tarball/master
+	wget --no-check-certificate http://github.com/makestuff/libxsvf/tarball/master
 	tar xvzf makestuff-libxsvf-*.tar.gz
 	rm makestuff-libxsvf-*.tar.gz
 	mkdir -p ../../libs
 	mv makestuff-libxsvf* ../../libs/libxsvf
 
 ../../libs/usbwrap:
-	wget http://github.com/makestuff/usbwrap/tarball/master
+	wget --no-check-certificate http://github.com/makestuff/usbwrap/tarball/master
 	tar xvzf makestuff-usbwrap-*.tar.gz
 	rm makestuff-usbwrap-*.tar.gz
 	mkdir -p ../../libs

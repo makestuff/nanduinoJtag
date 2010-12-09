@@ -15,42 +15,42 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 ../../libs/argtypes:
-	wget -O argtypes.tgz --no-check-certificate http://github.com/makestuff/argtypes/tarball/master
+	wget -O argtypes.tgz --no-check-certificate https://github.com/makestuff/argtypes/tarball/master
 	tar xvzf argtypes.tgz
 	rm argtypes.tgz
 	mkdir -p ../../libs
 	mv makestuff-argtypes* ../../libs/argtypes
 
 ../../libs/avrutil:
-	wget -O avrutil.tgz --no-check-certificate http://github.com/makestuff/avrutil/tarball/master
+	wget -O avrutil.tgz --no-check-certificate https://github.com/makestuff/avrutil/tarball/master
 	tar xvzf avrutil.tgz
 	rm avrutil.tgz
 	mkdir -p ../../libs
 	mv makestuff-avrutil* ../../libs/avrutil
 
 ../../libs/buffer:
-	wget -O buffer.tgz --no-check-certificate http://github.com/makestuff/buffer/tarball/master
+	wget -O buffer.tgz --no-check-certificate https://github.com/makestuff/buffer/tarball/master
 	tar xvzf buffer.tgz
 	rm buffer.tgz
 	mkdir -p ../../libs
 	mv makestuff-buffer* ../../libs/buffer
 
 ../../libs/dump:
-	wget -O dump.tgz --no-check-certificate http://github.com/makestuff/dump/tarball/master
+	wget -O dump.tgz --no-check-certificate https://github.com/makestuff/dump/tarball/master
 	tar xvzf dump.tgz
 	rm dump.tgz
 	mkdir -p ../../libs
 	mv makestuff-dump* ../../libs/dump
 
 ../../libs/libxsvf:
-	wget -O libxsvf.tgz --no-check-certificate http://github.com/makestuff/libxsvf/tarball/master
+	wget -O libxsvf.tgz --no-check-certificate https://github.com/makestuff/libxsvf/tarball/master
 	tar xvzf libxsvf.tgz
 	rm libxsvf.tgz
 	mkdir -p ../../libs
 	mv makestuff-libxsvf* ../../libs/libxsvf
 
 ../../libs/usbwrap:
-	wget -O usbwrap.tgz --no-check-certificate http://github.com/makestuff/usbwrap/tarball/master
+	wget -O usbwrap.tgz --no-check-certificate https://github.com/makestuff/usbwrap/tarball/master
 	tar xvzf usbwrap.tgz
 	rm usbwrap.tgz
 	mkdir -p ../../libs

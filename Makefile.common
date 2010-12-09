@@ -15,43 +15,43 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 ../../libs/argtypes:
-	wget --no-check-certificate http://github.com/makestuff/argtypes/tarball/master
-	tar xvzf makestuff-argtypes-*.tar.gz
-	rm makestuff-argtypes-*.tar.gz
+	wget -O argtypes.tgz --no-check-certificate http://github.com/makestuff/argtypes/tarball/master
+	tar xvzf argtypes.tgz
+	rm argtypes.tgz
 	mkdir -p ../../libs
 	mv makestuff-argtypes* ../../libs/argtypes
 
 ../../libs/avrutil:
-	wget --no-check-certificate http://github.com/makestuff/avrutil/tarball/master
-	tar xvzf makestuff-avrutil-*.tar.gz
-	rm makestuff-avrutil-*.tar.gz
+	wget -O avrutil.tgz --no-check-certificate http://github.com/makestuff/avrutil/tarball/master
+	tar xvzf avrutil.tgz
+	rm avrutil.tgz
 	mkdir -p ../../libs
 	mv makestuff-avrutil* ../../libs/avrutil
 
 ../../libs/buffer:
-	wget --no-check-certificate http://github.com/makestuff/buffer/tarball/master
-	tar xvzf makestuff-buffer-*.tar.gz
-	rm makestuff-buffer-*.tar.gz
+	wget -O buffer.tgz --no-check-certificate http://github.com/makestuff/buffer/tarball/master
+	tar xvzf buffer.tgz
+	rm buffer.tgz
 	mkdir -p ../../libs
 	mv makestuff-buffer* ../../libs/buffer
 
 ../../libs/dump:
-	wget --no-check-certificate http://github.com/makestuff/dump/tarball/master
-	tar xvzf makestuff-dump-*.tar.gz
-	rm makestuff-dump-*.tar.gz
+	wget -O dump.tgz --no-check-certificate http://github.com/makestuff/dump/tarball/master
+	tar xvzf dump.tgz
+	rm dump.tgz
 	mkdir -p ../../libs
 	mv makestuff-dump* ../../libs/dump
 
 ../../libs/libxsvf:
-	wget --no-check-certificate http://github.com/makestuff/libxsvf/tarball/master
-	tar xvzf makestuff-libxsvf-*.tar.gz
-	rm makestuff-libxsvf-*.tar.gz
+	wget -O libxsvf.tgz --no-check-certificate http://github.com/makestuff/libxsvf/tarball/master
+	tar xvzf libxsvf.tgz
+	rm libxsvf.tgz
 	mkdir -p ../../libs
 	mv makestuff-libxsvf* ../../libs/libxsvf
 
 ../../libs/usbwrap:
-	wget --no-check-certificate http://github.com/makestuff/usbwrap/tarball/master
-	tar xvzf makestuff-usbwrap-*.tar.gz
-	rm makestuff-usbwrap-*.tar.gz
+	wget -O usbwrap.tgz --no-check-certificate http://github.com/makestuff/usbwrap/tarball/master
+	tar xvzf usbwrap.tgz
+	rm usbwrap.tgz
 	mkdir -p ../../libs
 	mv makestuff-usbwrap* ../../libs/usbwrap

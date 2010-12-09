@@ -477,10 +477,10 @@ LUFA$(LUFA_VERSION):
 	cp -r ../../../3rd/LUFA$(LUFA_VERSION)/LUFA LUFA$(LUFA_VERSION)
 
 ../../../3rd/LUFA$(LUFA_VERSION):
-	wget http://www.fourwalledcubicle.com/files/LUFA/LUFA-$(LUFA_VERSION).zip
-	$(UNZ) LUFA-$(LUFA_VERSION).zip
+	wget -O lufa.zip --no-check-certificate http://www.fourwalledcubicle.com/files/LUFA/LUFA-$(LUFA_VERSION).zip
+	$(UNZ) lufa.zip
 	mkdir -p ../../../3rd
-	rm LUFA-$(LUFA_VERSION).zip
+	rm lufa.zip
 	mv "LUFA $(LUFA_VERSION)" ../../../3rd/LUFA$(LUFA_VERSION)
 
 # Change the build target to build a HEX file or a library.

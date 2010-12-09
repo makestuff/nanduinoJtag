@@ -41,16 +41,16 @@ all: \
 -include Makefile.common
 
 $(UNZIP_HOME):
-	wget --no-check-certificate ftp://ftp.info-zip.org/pub/infozip/win32/unz$(UNZIP_VERSION)xn.exe
-	mkdir unz$(UNZIP_VERSION); cd unz$(UNZIP_VERSION); ../unz$(UNZIP_VERSION)xn.exe
+	wget -O unz.exe --no-check-certificate ftp://ftp.info-zip.org/pub/infozip/win32/unz$(UNZIP_VERSION)xn.exe
+	mkdir unz$(UNZIP_VERSION); cd unz$(UNZIP_VERSION); ../unz.exe
 	mkdir -p ../../3rd
 	mv unz$(UNZIP_VERSION) ../../3rd/
-	rm -rf unz$(UNZIP_VERSION)xn.exe
+	rm -f unz.exe
 
 $(LIBUSB_HOME):
-	wget --no-check-certificate 'http://downloads.sourceforge.net/project/libusb-win32/libusb-win32-releases/$(LIBUSB_VERSION)/libusb-win32-device-bin-$(LIBUSB_VERSION).tar.gz'
-	tar xvzf libusb-win32-device-bin-$(LIBUSB_VERSION).tar.gz
-	rm libusb-win32-device-bin-$(LIBUSB_VERSION).tar.gz
+	wget -O libusb-win32.tgz --no-check-certificate 'http://downloads.sourceforge.net/project/libusb-win32/libusb-win32-releases/$(LIBUSB_VERSION)/libusb-win32-device-bin-$(LIBUSB_VERSION).tar.gz'
+	tar xvzf libusb-win32.tgz
+	rm libusb-win32.tgz
 	mkdir -p ../../3rd
 	mv libusb-win32-device-bin-$(LIBUSB_VERSION) ../../3rd/
 

@@ -678,6 +678,18 @@ ParseStatus gotXSDRTDO(const uint16 length, const uint8 *const data, const uint8
 	}
 }
 
+ParseStatus gotXSDRB(unsigned short tdoNumBits, const unsigned char *tdoBitmap) {
+	return PARSE_ILLEGAL_COMMAND;
+}
+
+ParseStatus gotXSDRC(unsigned short tdoNumBits, const unsigned char *tdoBitmap) {
+	return PARSE_ILLEGAL_COMMAND;
+}
+
+ParseStatus gotXSDRE(unsigned short tdoNumBits, const unsigned char *tdoBitmap) {
+	return PARSE_ILLEGAL_COMMAND;
+}
+
 ParseStatus gotXSTATE(TAPState value) {
 	/*jtagReset();
 	switch ( state ) {
@@ -689,6 +701,14 @@ ParseStatus gotXSTATE(TAPState value) {
 		case TAPSTATE_SELECT_IR:
 	*/
 	return PARSE_SUCCESS;
+}
+
+ParseStatus gotXENDIR(unsigned char endState) {
+	return PARSE_ILLEGAL_COMMAND;
+}
+
+ParseStatus gotXENDDR(unsigned char endState) {
+	return PARSE_ILLEGAL_COMMAND;
 }
 
 void EVENT_USB_Device_UnhandledControlRequest(void) {

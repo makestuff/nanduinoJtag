@@ -40,13 +40,14 @@ static uint8 m_irLens[16];
 static uint8 m_numDevices;
 
 int main(void) {
+	REGCR |= (1 << REGDIS);
 	MCUSR &= ~(1 << WDRF);
 	wdt_disable();
 	clock_prescale_set(clock_div_1);
 	PORTB = 0x00;
 	DDRB = 0x00;
 	usartInit(38400);
-	usartSendFlashString(PSTR("NanduinoJTAG...\n"));
+	usartSendFlashString(PSTR("NanduinoJTAG...\r"));
 	sei();
 	USB_Init();
 	
@@ -304,7 +305,7 @@ uint8 jtagScanForDevices(uint32 *idCodes, uint8 bufferSpace) {
 		if ( jtagClock(0) ) {
 			thisID |= 0x80000000;
 		}
-		if ( thisID == 0xFFFFFFFF ) {
+		if ( thisID == 0xFFFFFFFF || thisID == 0x00000000 ) {
 			break;
 		}
 		*idCodes++ = thisID; // Stay in Shift-DR
@@ -517,7 +518,7 @@ ParseStatus gotXSIR(uint8 length, const uint8 *sir) {
 		usartSendByteHex(length);
 		usartSendFlashString(PSTR(", "));
 		usartSendByteHex(*sir);
-		usartSendFlashString(PSTR(")\n"));
+		usartSendFlashString(PSTR(")\r"));
 	#endif
 	sir += bitsToBytes(length) - 1;
 	// Assume Run-Test/Idle on entry
@@ -593,7 +594,7 @@ ParseStatus gotXSDRTDO(const uint16 length, const uint8 *const data, const uint8
 		for ( i = 0; i < offset; i++ ) {
 			usartSendByteHex(mask[i]);
 		}
-		usartSendFlashString(PSTR(")\n"));
+		usartSendFlashString(PSTR(")\r"));
 	#endif
 	for ( ; ; ) {
 		#if defined(DEBUG) && DEBUG > 1
@@ -603,7 +604,7 @@ ParseStatus gotXSDRTDO(const uint16 length, const uint8 *const data, const uint8
 			#else
 				usartSendByteHex(m_repeats-retryCount);
 			#endif
-			usartSendByte('\n');
+			usartSendByte('\r');
 		#endif
 		errorOccurred = 0;
 		dataPtr = data + offset - 1;
@@ -623,7 +624,7 @@ ParseStatus gotXSDRTDO(const uint16 length, const uint8 *const data, const uint8
 				usartSendByteHex(dataPtr[offset]);
 				usartSendFlashString(PSTR(", mask="));
 				usartSendByteHex(*maskPtr);
-				usartSendFlashString(PSTR("\n"));
+				usartSendFlashString(PSTR("\r"));
 			#endif
 			if ( (byte & *maskPtr) != dataPtr[offset] ) {
 				errorOccurred = 1;
@@ -644,7 +645,7 @@ ParseStatus gotXSDRTDO(const uint16 length, const uint8 *const data, const uint8
 			usartSendByteHex(dataPtr[offset]);
 			usartSendFlashString(PSTR(", mask="));
 			usartSendByteHex(*maskPtr);
-			usartSendFlashString(PSTR("\n"));
+			usartSendFlashString(PSTR("\r"));
 		#endif
 		if ( (byte & *maskPtr) != dataPtr[offset] ) {
 			errorOccurred = 1;
@@ -662,7 +663,7 @@ ParseStatus gotXSDRTDO(const uint16 length, const uint8 *const data, const uint8
 				// reached maxRetries, give up
 				jtagGotoIdleState();  // Now in Run-Test/Idle
 				#if defined(DEBUG) && DEBUG > 1
-					usartSendFlashString(PSTR("  failed!\n"));
+					usartSendFlashString(PSTR("  failed!\r"));
 				#endif
 				m_failures++;
 				return PARSE_SUCCESS;
@@ -670,7 +671,7 @@ ParseStatus gotXSDRTDO(const uint16 length, const uint8 *const data, const uint8
 		} else {
 			jtagGotoIdleState();  // Now in Run-Test/Idle
 			#if defined(DEBUG) && DEBUG > 1
-				usartSendFlashString(PSTR("  success!\n"));
+				usartSendFlashString(PSTR("  success!\r"));
 			#endif
 			return PARSE_SUCCESS;
 		}
@@ -852,7 +853,7 @@ void EVENT_USB_Device_UnhandledControlRequest(void) {
 				#ifdef DEBUG
 					usartSendFlashString(PSTR("total = "));
 					usartSendLongHex(bytesRemaining);
-					usartSendByte('\n');
+					usartSendByte('\r');
 				#endif
 				m_failures = 0;
 				parseInit();

@@ -53,11 +53,15 @@ typedef struct {
 } Device;
 typedef enum {
 	ATMEGA162 = 0,
-	XC9572
+	XC9572,
+	XC3S200,
+	XCF02S
 } DeviceIndex;
 static Device devices[] = {
 	{ATMEL,  "ATMEGA162", 4, 16384/BLOCK_SIZE},
-	{XILINX, "XC9572",    8, 0}
+	{XILINX, "XC9572",    8, 0},
+	{XILINX, "XC3S200",   6, 0},
+	{XILINX, "XCF02S",    8, 0}
 };
 
 const Device *getDevice(uint16 manufacturerID, uint16 deviceID) {
@@ -72,6 +76,10 @@ const Device *getDevice(uint16 manufacturerID, uint16 deviceID) {
 		// Xilinx
 		if ( deviceID == 0x9504 ) {
 			return &devices[XC9572];
+		} else if ( deviceID == 0x1414 ) {
+			return &devices[XC3S200];
+		} else if ( deviceID == 0x5045 ) {
+			return &devices[XCF02S];
 		} else {
 			return NULL;
 		}
@@ -231,7 +239,7 @@ int main(int argc, char **argv) {
 		goto cleanupBuffer;
 	}
 
-	usb_clear_halt(deviceHandle, 2);
+	//usb_clear_halt(deviceHandle, 2);
 
 	if ( controlMsgRead(deviceHandle, CMD_SCAN, 0, 0, u.bytes, 64) ) {
 		exitCode = 5;
@@ -274,6 +282,7 @@ int main(int argc, char **argv) {
 			u.bytes[i] = devices[i]->IRLen;
 		}
 	}
+
 	if ( controlMsgWrite(deviceHandle, CMD_SET_IRLENS, numDevices, 0, u.bytes, numDevices) ) {
 		fprintf(stderr, "Call to CMD_SET_IRLENS failed; this should not happen!\n");
 		exitCode = 7;
